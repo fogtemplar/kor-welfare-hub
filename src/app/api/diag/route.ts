@@ -1,59 +1,57 @@
 import { NextResponse } from "next/server";
+import * as cheerio from "cheerio";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const tests = [
-    {
-      name: "bokjiro",
-      url: `http://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001?serviceKey=${process.env.BOKJIRO_API_KEY}&callTp=L&pageNo=1&numOfRows=2&srchKeyCode=001`,
-    },
-    {
-      name: "bokjiro-https",
-      url: `https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001?serviceKey=${process.env.BOKJIRO_API_KEY}&callTp=L&pageNo=1&numOfRows=2&srchKeyCode=001`,
-    },
-    {
-      name: "youthcenter",
-      url: `https://www.youthcenter.go.kr/go/ythip/getPlcy?apiKeyNm=${process.env.YOUTHCENTER_API_KEY}&pageSize=2&pageNum=1&rtnType=json`,
-    },
-    {
-      name: "govService",
-      url: `https://api.odcloud.kr/api/gov24/v3/serviceList?serviceKey=${process.env.GOV_SERVICE_API_KEY}&page=1&perPage=2&returnType=JSON`,
-    },
-    {
-      name: "kstartup",
-      url: `https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01?serviceKey=${process.env.KSTARTUP_API_KEY}&page=1&perPage=2&returnType=json`,
-    },
-  ];
+  const out: Record<string, any> = { at: new Date().toISOString() };
 
-  const results: any[] = [];
-
-  for (const t of tests) {
-    const start = Date.now();
-    try {
-      const res = await fetch(t.url, {
-        cache: "no-store",
-        headers: { "User-Agent": "kor-welfare-hub/0.1" },
-      });
-      const body = await res.text();
-      results.push({
-        name: t.name,
-        status: res.status,
-        ok: res.ok,
-        took_ms: Date.now() - start,
-        size: body.length,
-        peek: body.slice(0, 300),
-      });
-    } catch (e: any) {
-      results.push({
-        name: t.name,
-        took_ms: Date.now() - start,
-        error: String(e?.message ?? e),
-        cause: e?.cause ? String(e.cause) : undefined,
-      });
-    }
+  // 1. bokjiro raw + cheerio parse
+  try {
+    const url = `https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001?serviceKey=${process.env.BOKJIRO_API_KEY}&callTp=L&pageNo=1&numOfRows=5&srchKeyCode=001`;
+    const res = await fetch(url, { cache: "no-store", headers: { "User-Agent": "kor-welfare-hub/0.1" } });
+    const xml = await res.text();
+    const $ = cheerio.load(xml, { xmlMode: true });
+    const totalCount = $("totalCount").first().text().trim();
+    const resultCode = $("resultCode").first().text().trim();
+    const servListCount = $("servList").length;
+    const firstServId = $("servList servId").first().text();
+    out.bokjiro = {
+      httpStatus: res.status,
+      xmlLength: xml.length,
+      totalCount,
+      resultCode,
+      servListCount,
+      firstServId,
+      xmlPeek: xml.slice(0, 200),
+    };
+  } catch (e: any) {
+    out.bokjiro_error = String(e?.message ?? e);
   }
 
-  return NextResponse.json({ results, at: new Date().toISOString() }, { status: 200 });
+  // 2. youthcenter raw
+  try {
+    const url = `https://www.youthcenter.go.kr/go/ythip/getPlcy?apiKeyNm=${process.env.YOUTHCENTER_API_KEY}&pageSize=2&pageNum=1&rtnType=json`;
+    const res = await fetch(url, { cache: "no-store", headers: { "User-Agent": "kor-welfare-hub/0.1" } });
+    const json = await res.json();
+    out.youthcenter = {
+      httpStatus: res.status,
+      resultCode: json?.resultCode,
+      totalCount: json?.result?.pagging?.totCount,
+      itemCount: (json?.result?.youthPolicyList ?? []).length,
+    };
+  } catch (e: any) {
+    out.youthcenter_error = String(e?.message ?? e);
+  }
+
+  // 3. cheerio version sanity
+  try {
+    const $ = cheerio.load("<a><b>hi</b></a>", { xmlMode: true });
+    out.cheerio_ok = $("b").text() === "hi";
+  } catch (e: any) {
+    out.cheerio_error = String(e?.message ?? e);
+  }
+
+  return NextResponse.json(out);
 }
