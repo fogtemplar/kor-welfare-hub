@@ -1,0 +1,34 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 환경변수 (절대 커밋 X — API 키 포함)
+.env
+.env*.local
+.env.local
+
+# 디스크 캐시 (스크래퍼 결과, 매일 갱신됨)
+/.cache/
+
+# vercel
+.vercel
+
+# IDE
+.vscode/
+.idea/
