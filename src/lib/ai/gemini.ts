@@ -92,7 +92,7 @@ const PICKS_SCHEMA = {
 const FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
 
 async function callGemini(prompt: string, schema: object): Promise<any> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error("GEMINI_API_KEY not set");
 
   const body = {

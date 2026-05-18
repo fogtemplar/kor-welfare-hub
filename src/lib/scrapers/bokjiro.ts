@@ -120,10 +120,10 @@ export async function fetchBokjiroPolicies(opts: { forceRefresh?: boolean } = {}
       return cached.items;
     }
     // Stale cache fallback: if no key, still return stale data instead of nothing
-    if (cached && !process.env.BOKJIRO_API_KEY) return cached.items;
+    if (cached && !process.env.BOKJIRO_API_KEY?.trim()) return cached.items;
   }
 
-  const key = process.env.BOKJIRO_API_KEY;
+  const key = process.env.BOKJIRO_API_KEY?.trim();
   if (!key) return [];
 
   // 두 엔드포인트(중앙·지자체)를 병렬로 호출

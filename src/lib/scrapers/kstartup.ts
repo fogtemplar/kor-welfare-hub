@@ -105,10 +105,10 @@ export async function fetchKStartupPolicies(opts: { forceRefresh?: boolean } = {
   if (!opts.forceRefresh) {
     const cached = await readCache();
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return cached.items;
-    if (cached && !process.env.KSTARTUP_API_KEY) return cached.items;
+    if (cached && !process.env.KSTARTUP_API_KEY?.trim()) return cached.items;
   }
 
-  const key = process.env.KSTARTUP_API_KEY || process.env.BOKJIRO_API_KEY;
+  const key = process.env.KSTARTUP_API_KEY?.trim() || process.env.BOKJIRO_API_KEY?.trim();
   if (!key) return [];
 
   const first = await fetchPage(key, 1);

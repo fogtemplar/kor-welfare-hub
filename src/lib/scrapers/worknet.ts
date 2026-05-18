@@ -108,15 +108,15 @@ export async function fetchWorknetPolicies(opts: { forceRefresh?: boolean } = {}
     if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return cached.items;
     if (
       cached &&
-      !process.env.WORKNET_HRD_KEY &&
-      !process.env.WORKNET_JOBSEEKER_KEY &&
-      !process.env.WORKNET_API_KEY
+      !process.env.WORKNET_HRD_KEY?.trim() &&
+      !process.env.WORKNET_JOBSEEKER_KEY?.trim() &&
+      !process.env.WORKNET_API_KEY?.trim()
     ) return cached.items;
   }
 
   // 서비스별 키 (없으면 해당 서비스 건너뜀)
-  const hrdKey = process.env.WORKNET_HRD_KEY || process.env.WORKNET_API_KEY;
-  const jobseekerKey = process.env.WORKNET_JOBSEEKER_KEY || process.env.WORKNET_API_KEY;
+  const hrdKey = process.env.WORKNET_HRD_KEY?.trim() || process.env.WORKNET_API_KEY?.trim();
+  const jobseekerKey = process.env.WORKNET_JOBSEEKER_KEY?.trim() || process.env.WORKNET_API_KEY?.trim();
 
   if (!hrdKey && !jobseekerKey) return [];
 
