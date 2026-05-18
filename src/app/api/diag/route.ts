@@ -1,56 +1,41 @@
 import { NextResponse } from "next/server";
-import * as cheerio from "cheerio";
+import { fetchBokjiroPolicies } from "@/lib/scrapers/bokjiro";
+import { promises as fs } from "node:fs";
+import path from "node:path";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const out: Record<string, any> = { at: new Date().toISOString() };
+  const out: Record<string, any> = { at: new Date().toISOString(), cwd: process.cwd() };
 
-  // 1. bokjiro raw + cheerio parse
+  // 1. .cache 파일 상태 확인 (Vercel filesystem 가시성)
+  const cachePath = path.join(process.cwd(), ".cache", "bokjiro.json");
   try {
-    const url = `https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001?serviceKey=${process.env.BOKJIRO_API_KEY}&callTp=L&pageNo=1&numOfRows=5&srchKeyCode=001`;
-    const res = await fetch(url, { cache: "no-store", headers: { "User-Agent": "kor-welfare-hub/0.1" } });
-    const xml = await res.text();
-    const $ = cheerio.load(xml, { xmlMode: true });
-    const totalCount = $("totalCount").first().text().trim();
-    const resultCode = $("resultCode").first().text().trim();
-    const servListCount = $("servList").length;
-    const firstServId = $("servList servId").first().text();
-    out.bokjiro = {
-      httpStatus: res.status,
-      xmlLength: xml.length,
-      totalCount,
-      resultCode,
-      servListCount,
-      firstServId,
-      xmlPeek: xml.slice(0, 200),
+    const stat = await fs.stat(cachePath);
+    out.cache_file = { exists: true, size: stat.size, mtime: stat.mtime };
+    const raw = await fs.readFile(cachePath, "utf8").catch(() => "");
+    const parsed = JSON.parse(raw);
+    out.cache_content = {
+      fetchedAt: parsed.fetchedAt,
+      itemCount: Array.isArray(parsed.items) ? parsed.items.length : -1,
     };
   } catch (e: any) {
-    out.bokjiro_error = String(e?.message ?? e);
+    out.cache_file = { exists: false, error: String(e?.message ?? e) };
   }
 
-  // 2. youthcenter raw
+  // 2. forceRefresh로 스크래퍼 직접 호출
+  const t1 = Date.now();
   try {
-    const url = `https://www.youthcenter.go.kr/go/ythip/getPlcy?apiKeyNm=${process.env.YOUTHCENTER_API_KEY}&pageSize=2&pageNum=1&rtnType=json`;
-    const res = await fetch(url, { cache: "no-store", headers: { "User-Agent": "kor-welfare-hub/0.1" } });
-    const json = await res.json();
-    out.youthcenter = {
-      httpStatus: res.status,
-      resultCode: json?.resultCode,
-      totalCount: json?.result?.pagging?.totCount,
-      itemCount: (json?.result?.youthPolicyList ?? []).length,
+    const items = await fetchBokjiroPolicies({ forceRefresh: true });
+    out.fetchBokjiroPolicies_forceRefresh = {
+      count: items.length,
+      took_ms: Date.now() - t1,
+      firstId: items[0]?.id,
+      firstTitle: items[0]?.title,
     };
   } catch (e: any) {
-    out.youthcenter_error = String(e?.message ?? e);
-  }
-
-  // 3. cheerio version sanity
-  try {
-    const $ = cheerio.load("<a><b>hi</b></a>", { xmlMode: true });
-    out.cheerio_ok = $("b").text() === "hi";
-  } catch (e: any) {
-    out.cheerio_error = String(e?.message ?? e);
+    out.fetchBokjiroPolicies_error = String(e?.message ?? e);
   }
 
   return NextResponse.json(out);
