@@ -75,7 +75,7 @@ async function fetchPage(
 
   try {
     const res = await fetch(url.toString(), {
-      next: { revalidate: 86400 },
+      cache: "no-store",
       headers: { "User-Agent": "kor-welfare-hub/0.1" },
     });
     if (!res.ok) {
