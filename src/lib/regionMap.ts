@@ -78,14 +78,31 @@ const SIGUN_TO_SIDO: Array<[string, string]> = [
 ];
 
 /**
- * 텍스트(제목/기관명/요약)에서 시·군·구 또는 광역명을 찾아 시도로 변환.
- * 이미 명시된 region이 있고 "전국"이 아니면 그대로 반환.
+ * 정책 지역 정규화. 우선순위:
+ *   1) title에 시·군·구·광역명이 명시되어 있으면 그것 (가장 신뢰)
+ *   2) 이미 region이 "전국"이 아니면 그대로
+ *   3) 나머지 텍스트(agency·summary)에서 키워드 찾기
+ *
+ * title 우선 이유: API의 등록기관 필드가 종종 부정확
+ * (예: 충남 아산시 정책인데 등록기관이 "경기도"로 잘못 등록됨)
  */
-export function refineRegion(currentRegion: string, ...textParts: string[]): string {
+export function refineRegion(
+  currentRegion: string,
+  title: string,
+  ...otherParts: string[]
+): string {
+  // 1순위: title의 시·군·구·광역명
+  if (title) {
+    for (const [keyword, sido] of SIGUN_TO_SIDO) {
+      if (title.includes(keyword)) return sido;
+    }
+  }
+  // 2순위: 이미 region 명시되어 있으면 그것
   if (currentRegion && currentRegion !== "전국") return currentRegion;
-  const haystack = textParts.filter(Boolean).join(" ");
+  // 3순위: 나머지 텍스트
+  const rest = otherParts.filter(Boolean).join(" ");
   for (const [keyword, sido] of SIGUN_TO_SIDO) {
-    if (haystack.includes(keyword)) return sido;
+    if (rest.includes(keyword)) return sido;
   }
   return currentRegion || "전국";
 }
