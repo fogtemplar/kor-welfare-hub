@@ -1,42 +1,71 @@
 import { NextResponse } from "next/server";
-import { fetchBokjiroPolicies } from "@/lib/scrapers/bokjiro";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import * as cheerio from "cheerio";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// bokjiro fetchPage 흉내 + 단계별 로그
+async function debugBokjiroPage(pageSize: number) {
+  const out: any = { pageSize };
+  const url = new URL(
+    "https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001",
+  );
+  url.searchParams.set("serviceKey", process.env.BOKJIRO_API_KEY ?? "");
+  url.searchParams.set("callTp", "L");
+  url.searchParams.set("pageNo", "1");
+  url.searchParams.set("numOfRows", String(pageSize));
+  url.searchParams.set("srchKeyCode", "001");
+
+  try {
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      headers: { "User-Agent": "kor-welfare-hub/0.1" },
+    });
+    out.httpStatus = res.status;
+    const xml = await res.text();
+    out.xmlLength = xml.length;
+    out.xmlHead = xml.slice(0, 150);
+    out.xmlTail = xml.slice(-150);
+
+    try {
+      const $ = cheerio.load(xml, { xmlMode: true });
+      out.cheerio = "OK";
+      out.resultCode = $("resultCode").first().text().trim();
+      out.totalCount = $("totalCount").first().text().trim();
+      out.servListCount = $("servList").length;
+      // each 안의 동작 확인
+      let firstServId = "";
+      let firstServNm = "";
+      let parsedCount = 0;
+      $("servList").each((_, el) => {
+        const $el = $(el);
+        const id = $el.find("servId").first().text().trim();
+        const nm = $el.find("servNm").first().text().trim();
+        if (id && nm) {
+          parsedCount++;
+          if (!firstServId) {
+            firstServId = id;
+            firstServNm = nm;
+          }
+        }
+      });
+      out.parsedCount = parsedCount;
+      out.firstServId = firstServId;
+      out.firstServNm = firstServNm;
+    } catch (parseErr: any) {
+      out.cheerio_error = String(parseErr?.message ?? parseErr);
+    }
+  } catch (fetchErr: any) {
+    out.fetch_error = String(fetchErr?.message ?? fetchErr);
+  }
+
+  return out;
+}
+
 export async function GET() {
-  const out: Record<string, any> = { at: new Date().toISOString(), cwd: process.cwd() };
-
-  // 1. .cache 파일 상태 확인 (Vercel filesystem 가시성)
-  const cachePath = path.join(process.cwd(), ".cache", "bokjiro.json");
-  try {
-    const stat = await fs.stat(cachePath);
-    out.cache_file = { exists: true, size: stat.size, mtime: stat.mtime };
-    const raw = await fs.readFile(cachePath, "utf8").catch(() => "");
-    const parsed = JSON.parse(raw);
-    out.cache_content = {
-      fetchedAt: parsed.fetchedAt,
-      itemCount: Array.isArray(parsed.items) ? parsed.items.length : -1,
-    };
-  } catch (e: any) {
-    out.cache_file = { exists: false, error: String(e?.message ?? e) };
-  }
-
-  // 2. forceRefresh로 스크래퍼 직접 호출
-  const t1 = Date.now();
-  try {
-    const items = await fetchBokjiroPolicies({ forceRefresh: true });
-    out.fetchBokjiroPolicies_forceRefresh = {
-      count: items.length,
-      took_ms: Date.now() - t1,
-      firstId: items[0]?.id,
-      firstTitle: items[0]?.title,
-    };
-  } catch (e: any) {
-    out.fetchBokjiroPolicies_error = String(e?.message ?? e);
-  }
-
-  return NextResponse.json(out);
+  return NextResponse.json({
+    at: new Date().toISOString(),
+    smallPage: await debugBokjiroPage(5),
+    bigPage: await debugBokjiroPage(500),
+  });
 }
