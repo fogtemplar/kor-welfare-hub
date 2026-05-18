@@ -4,7 +4,8 @@ import { fetchExternalPolicies } from "@/lib/scrapers/aggregate";
 import { applyFilter, DEFAULT_FILTER } from "@/lib/filter";
 import type { PolicyCategory } from "@/lib/types";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
