@@ -1,37 +1,59 @@
 import { NextResponse } from "next/server";
-import { fetchBokjiroPolicies } from "@/lib/scrapers/bokjiro";
-import { fetchYouthcenterPolicies } from "@/lib/scrapers/youthcenter";
-import { fetchKStartupPolicies } from "@/lib/scrapers/kstartup";
-import { fetchGovServicePolicies } from "@/lib/scrapers/govService";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const env = {
-    BOKJIRO_API_KEY: !!process.env.BOKJIRO_API_KEY,
-    YOUTHCENTER_API_KEY: !!process.env.YOUTHCENTER_API_KEY,
-    KSTARTUP_API_KEY: !!process.env.KSTARTUP_API_KEY,
-    GOV_SERVICE_API_KEY: !!process.env.GOV_SERVICE_API_KEY,
-    GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
-  };
+  const tests = [
+    {
+      name: "bokjiro",
+      url: `http://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001?serviceKey=${process.env.BOKJIRO_API_KEY}&callTp=L&pageNo=1&numOfRows=2&srchKeyCode=001`,
+    },
+    {
+      name: "bokjiro-https",
+      url: `https://apis.data.go.kr/B554287/NationalWelfareInformationsV001/NationalWelfarelistV001?serviceKey=${process.env.BOKJIRO_API_KEY}&callTp=L&pageNo=1&numOfRows=2&srchKeyCode=001`,
+    },
+    {
+      name: "youthcenter",
+      url: `https://www.youthcenter.go.kr/go/ythip/getPlcy?apiKeyNm=${process.env.YOUTHCENTER_API_KEY}&pageSize=2&pageNum=1&rtnType=json`,
+    },
+    {
+      name: "govService",
+      url: `https://api.odcloud.kr/api/gov24/v3/serviceList?serviceKey=${process.env.GOV_SERVICE_API_KEY}&page=1&perPage=2&returnType=JSON`,
+    },
+    {
+      name: "kstartup",
+      url: `https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01?serviceKey=${process.env.KSTARTUP_API_KEY}&page=1&perPage=2&returnType=json`,
+    },
+  ];
 
-  const results: Record<string, { count: number; took_ms: number; error?: string }> = {};
+  const results: any[] = [];
 
-  for (const [name, fn] of [
-    ["bokjiro", fetchBokjiroPolicies],
-    ["youthcenter", fetchYouthcenterPolicies],
-    ["kstartup", fetchKStartupPolicies],
-    ["govService", fetchGovServicePolicies],
-  ] as const) {
-    const t = Date.now();
+  for (const t of tests) {
+    const start = Date.now();
     try {
-      const items = await fn({ forceRefresh: true });
-      results[name] = { count: items.length, took_ms: Date.now() - t };
+      const res = await fetch(t.url, {
+        cache: "no-store",
+        headers: { "User-Agent": "kor-welfare-hub/0.1" },
+      });
+      const body = await res.text();
+      results.push({
+        name: t.name,
+        status: res.status,
+        ok: res.ok,
+        took_ms: Date.now() - start,
+        size: body.length,
+        peek: body.slice(0, 300),
+      });
     } catch (e: any) {
-      results[name] = { count: 0, took_ms: Date.now() - t, error: String(e?.message ?? e) };
+      results.push({
+        name: t.name,
+        took_ms: Date.now() - start,
+        error: String(e?.message ?? e),
+        cause: e?.cause ? String(e.cause) : undefined,
+      });
     }
   }
 
-  return NextResponse.json({ env, results, at: new Date().toISOString() });
+  return NextResponse.json({ results, at: new Date().toISOString() }, { status: 200 });
 }
