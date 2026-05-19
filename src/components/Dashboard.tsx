@@ -17,10 +17,10 @@ import {
 import { PolicyCard } from "./PolicyCard";
 import { PolicyDetail } from "./PolicyDetail";
 import { ProfileSheet } from "./ProfileSheet";
-import { AiAssistant } from "./AiAssistant";
 import { PolicyNewsSection } from "./PolicyNewsSection";
 import { OnboardingFlow } from "./OnboardingFlow";
 import { BottomNav } from "./BottomNav";
+import { InlineAiSearch } from "./InlineAiSearch";
 import { getBookmarks } from "@/lib/bookmarks";
 
 const ONBOARDING_KEY = "kor-welfare-hub:onboarded:v1";
@@ -34,7 +34,6 @@ export function Dashboard({ policies }: { policies: Policy[] }) {
   const [selected, setSelected] = useState<Policy | null>(null);
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [tab, setTab] = useState<"home" | "saved">("home");
@@ -137,12 +136,6 @@ export function Dashboard({ policies }: { policies: Policy[] }) {
               내 혜택 찾아보기
             </button>
             <button
-              onClick={() => setAiOpen(true)}
-              className="px-5 py-3 rounded-xl bg-bg-subtle text-ink text-15 font-bold hover:bg-line transition"
-            >
-              상황으로 검색
-            </button>
-            <button
               onClick={() => setProfileOpen(true)}
               className={`px-5 py-3 rounded-xl text-15 font-bold transition ${
                 hasProfile
@@ -154,6 +147,8 @@ export function Dashboard({ policies }: { policies: Policy[] }) {
             </button>
           </div>
         </header>
+
+        <InlineAiSearch onPickPolicy={(p) => setSelected(p)} />
 
         {/* Recommended */}
         {hasProfile && recommended.length > 0 && (
@@ -319,14 +314,6 @@ export function Dashboard({ policies }: { policies: Policy[] }) {
         onSave={handleSaveProfile}
         onClear={handleResetProfile}
         onClose={() => setProfileOpen(false)}
-      />
-      <AiAssistant
-        open={aiOpen}
-        onClose={() => setAiOpen(false)}
-        onPickPolicy={(p) => {
-          setAiOpen(false);
-          setSelected(p);
-        }}
       />
       {onboardingOpen && (
         <OnboardingFlow
