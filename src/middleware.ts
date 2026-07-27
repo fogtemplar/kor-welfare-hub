@@ -12,6 +12,8 @@ import type { NextRequest } from "next/server";
 //  - /api/ai/*          : 허용 목록에 있는 오리진만. 목록 밖이면 CORS 헤더 없음
 //                         → 브라우저가 cross-origin 호출을 차단한다.
 const BUILT_IN_ORIGINS = [
+  // 앱인토스 콘솔의 콜백 [테스트하기]는 브라우저에서 직접 요청한다.
+  "https://apps-in-toss.toss.im",
   "https://bokji.apps.tossmini.com",
   "https://bokji.private-apps.tossmini.com",
   "https://kor-welfare-hub.apps.tossmini.com",
