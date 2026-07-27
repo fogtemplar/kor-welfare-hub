@@ -5,7 +5,7 @@ export default defineConfig({
   brand: {
     displayName: "나라가쏜다",
     primaryColor: "#3182F6",
-    icon: "https://kor-welfare-hub.vercel.app/app-icon.svg",
+    icon: "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png",
   },
   web: {
     host: "localhost",

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const API_BASE = "https://kor-welfare-hub.vercel.app";
+const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
@@ -326,11 +327,11 @@ function App() {
     <main className="app-shell">
       <header className="hero">
         <div className="account-row">
-          <span className="eyebrow">정부 혜택 {total.toLocaleString()}개 통합</span>
+          <div className="brand-lockup">
+            <img src={BRAND_ICON} alt="" />
+            <div><strong>나라가쏜다</strong><span>내 복지 혜택 30초 검색</span></div>
+          </div>
           <div className="account-actions">
-            <button className="user-data-button" onClick={() => consentedData ? setAccountOpen(true) : void handleUserData()} disabled={authLoading}>
-              {consentedData ? "내 정보" : "맞춤 찾기"}
-            </button>
             {(loginAvailable || profile) && (
               <button className="account-button" onClick={() => profile ? setAccountOpen(true) : void handleTossLogin()} disabled={authLoading}>
                 {profile ? `${profile.name || "토스 사용자"}님` : authLoading ? "연결 중…" : "토스 로그인"}
@@ -338,8 +339,16 @@ function App() {
             )}
           </div>
         </div>
-        <h1>내가 받을 수 있는 혜택을<br />빠르게 찾아보세요</h1>
-        <p>복지로·정부24·청년정책을 한곳에서 확인할 수 있어요.</p>
+        <div className="hero-copy">
+          <span className="eyebrow">정부 혜택 {total.toLocaleString()}개 통합</span>
+          <h1>몰라서 못 받는 지원금,<br /><em>한 번에 찾아드려요</em></h1>
+          <p>복지로·정부24·온통청년 정보를 내 조건에 맞춰 빠르게 확인하세요.</p>
+          <button className="hero-personalize" onClick={() => consentedData ? setAccountOpen(true) : void handleUserData()} disabled={authLoading}>
+            <span className="hero-personalize-icon" aria-hidden="true">✦</span>
+            <span><strong>{consentedData ? "내 정보로 다시 맞춤 찾기" : "토스 정보로 맞춤 혜택 찾기"}</strong><small>직접 입력 없이 안전하게 불러와요</small></span>
+            <b aria-hidden="true">›</b>
+          </button>
+        </div>
       </header>
 
       {authError && <div className="network-banner auth-error" role="alert">{authError}</div>}
@@ -349,16 +358,16 @@ function App() {
 
       <section className="search-panel" aria-label="혜택 검색">
         <label className="search-box">
-          <span aria-hidden="true">⌕</span>
+          <span className="search-icon" aria-hidden="true">⌕</span>
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="월세, 청년, 출산처럼 검색해 보세요"
           />
         </label>
-        <select value={region} onChange={(event) => changeRegion(event.target.value)}>
+        <label className="region-select"><span aria-hidden="true">⌖</span><select aria-label="지역 선택" value={region} onChange={(event) => changeRegion(event.target.value)}>
           {regions.map((item) => <option key={item}>{item}</option>)}
-        </select>
+        </select><b aria-hidden="true">⌄</b></label>
       </section>
 
       <nav className="category-row" aria-label="혜택 분야">
@@ -375,7 +384,7 @@ function App() {
       </nav>
 
       <div className="list-heading">
-        <strong>{savedOnly ? `저장한 혜택 ${visibleItems.length}건` : `${count.toLocaleString()}건의 혜택`}</strong>
+        <div><span>{savedOnly ? "저장한 혜택" : "지금 확인할 수 있는 혜택"}</span><strong>{savedOnly ? `${visibleItems.length}개` : `${count.toLocaleString()}개`}</strong></div>
         <button aria-pressed={savedOnly} className={savedOnly ? "saved-filter active" : "saved-filter"} onClick={() => setSavedOnly((value) => !value)}>
           ♥ 저장 {saved.size}
         </button>
@@ -410,7 +419,7 @@ function App() {
               <button className="card-main" onClick={() => setSelected(policy)}>
                 <h2>{policy.title}</h2>
                 <p>{policy.summary || policy.benefit}</p>
-                <small>{policy.agency}</small>
+                <div className="card-meta"><small>{policy.agency}</small><span aria-hidden="true">›</span></div>
               </button>
             </article>
           ))}
