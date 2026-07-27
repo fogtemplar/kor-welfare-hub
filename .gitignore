@@ -32,3 +32,8 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
+
+# Apps in Toss local build dependencies/output
+/apps-in-toss/node_modules/
+/apps-in-toss/dist/
+/apps-in-toss/public/appsintoss-logo.png

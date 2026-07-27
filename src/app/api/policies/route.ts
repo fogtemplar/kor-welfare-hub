@@ -26,15 +26,25 @@ export async function GET(req: Request) {
   };
 
   const results = applyFilter(all, filter);
+  const requestedLimit = searchParams.get("limit");
+  const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
+  const limit = requestedLimit
+    ? Math.min(100, Math.max(1, Number(requestedLimit) || 30))
+    : results.length;
+  const items = requestedLimit ? results.slice(offset, offset + limit) : results;
+
   return NextResponse.json(
     {
       count: results.length,
       total: all.length,
+      offset,
+      limit,
+      hasMore: offset + items.length < results.length,
       sources: {
         curated: CURATED_POLICIES.length,
         external: external.length,
       },
-      items: results,
+      items,
     },
     { headers: { "Cache-Control": CDN_CACHE } },
   );

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:ait": "npm --prefix apps-in-toss run build",
     "start": "next start",
     "sync:bokjiro": "node scripts/sync-bokjiro.mjs"
   },
