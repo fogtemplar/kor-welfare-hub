@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import type { Policy, PolicyCategory } from "@/lib/types";
 import { CATEGORIES, REGIONS } from "@/lib/types";
 import { applyFilter, DEFAULT_FILTER, type FilterState } from "@/lib/filter";
@@ -15,13 +16,23 @@ import {
   saveProfile,
 } from "@/lib/profile";
 import { PolicyCard } from "./PolicyCard";
-import { PolicyDetail } from "./PolicyDetail";
-import { ProfileSheet } from "./ProfileSheet";
 import { PolicyNewsSection } from "./PolicyNewsSection";
-import { OnboardingFlow } from "./OnboardingFlow";
 import { BottomNav } from "./BottomNav";
 import { InlineAiSearch } from "./InlineAiSearch";
 import { getBookmarks } from "@/lib/bookmarks";
+
+const PolicyDetail = dynamic(
+  () => import("./PolicyDetail").then((module) => module.PolicyDetail),
+  { ssr: false },
+);
+const ProfileSheet = dynamic(
+  () => import("./ProfileSheet").then((module) => module.ProfileSheet),
+  { ssr: false },
+);
+const OnboardingFlow = dynamic(
+  () => import("./OnboardingFlow").then((module) => module.OnboardingFlow),
+  { ssr: false },
+);
 
 const ONBOARDING_KEY = "kor-welfare-hub:onboarded:v1";
 
@@ -46,18 +57,41 @@ export function Dashboard({
   useEffect(() => {
     if (fullLoaded) return;
     let cancelled = false;
-    fetch("/api/policies")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (cancelled || !d?.items?.length) return;
-        setPolicies(d.items as Policy[]);
-        setFullLoaded(true);
-      })
-      .catch(() => {
-        /* 실패해도 초기 목록으로 계속 동작 */
-      });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let idleId: number | undefined;
+
+    const loadAll = () => {
+      fetch("/api/policies")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled || !d?.items?.length) return;
+          setPolicies(d.items as Policy[]);
+          setFullLoaded(true);
+        })
+        .catch(() => {
+          /* 실패해도 초기 목록으로 계속 동작 */
+        });
+    };
+
+    const schedule = () => {
+      // 첫 페인트와 사용자 입력을 전체 정책 JSON 파싱보다 우선한다.
+      timer = setTimeout(() => {
+        if ("requestIdleCallback" in window) {
+          idleId = window.requestIdleCallback(loadAll, { timeout: 5000 });
+        } else {
+          loadAll();
+        }
+      }, 1500);
+    };
+
+    if (document.readyState === "complete") schedule();
+    else window.addEventListener("load", schedule, { once: true });
+
     return () => {
       cancelled = true;
+      window.removeEventListener("load", schedule);
+      if (idleId !== undefined) window.cancelIdleCallback(idleId);
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, [fullLoaded]);
 
@@ -341,13 +375,15 @@ export function Dashboard({
         </footer>
 
       {selected && <PolicyDetail policy={selected} onClose={() => setSelected(null)} />}
-      <ProfileSheet
-        open={profileOpen}
-        initial={profile}
-        onSave={handleSaveProfile}
-        onClear={handleResetProfile}
-        onClose={() => setProfileOpen(false)}
-      />
+      {profileOpen && (
+        <ProfileSheet
+          open
+          initial={profile}
+          onSave={handleSaveProfile}
+          onClear={handleResetProfile}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
       {onboardingOpen && (
         <OnboardingFlow
           policies={policies}

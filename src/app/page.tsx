@@ -10,8 +10,8 @@ export const revalidate = 86400;
 
 // 전체(수만 건)를 RSC 페이로드에 직렬화하면 모바일 WebView에서
 // JSON 파싱만 수 초가 걸린다. 첫 화면에 필요한 만큼만 심어 보내고,
-// 나머지는 CDN 캐시된 /api/policies 에서 마운트 후 받아온다.
-const INITIAL_COUNT = 300;
+// 나머지는 첫 화면이 안정된 뒤 CDN 캐시된 /api/policies 에서 받아온다.
+const INITIAL_COUNT = 24;
 
 export default async function Page() {
   const external = await fetchExternalPolicies();
