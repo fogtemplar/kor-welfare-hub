@@ -53,6 +53,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .list-heading > div { display: grid; gap: 3px; }
 .list-heading span { color: #8b95a1; font-size: 11px; }
 .list-heading strong { color: #191f28; font-size: 20px; letter-spacing: -.5px; }
+.data-freshness { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -5px 0 14px; color: #8b95a1; font-size: 10px; line-height: 1.45; }
+.data-freshness span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-freshness span:last-child { flex: none; }
 .saved-filter { min-height: 36px; padding: 0 11px; border: 0; border-radius: 11px; background: #f2f4f6; color: #8b95a1; font-size: 12px; font-weight: 700; }
 .saved-filter.active, .heart.active { color: #f04452; background: #fff0f1; }
 .policy-list { display: grid; gap: 11px; }
@@ -90,6 +93,13 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .detail-block h3 { margin: 0 0 7px; color: #333d4b; font-size: 14px; }
 .detail-block p { margin: 0; color: #6b7684; font-size: 13px; line-height: 1.65; white-space: pre-line; }
 .external-note { margin: 10px 0 0; color: #8b95a1; font-size: 11px; text-align: center; }
+.source-panel { display: grid; gap: 4px; margin-top: 8px; padding: 14px 15px; border-radius: 14px; background: #f7f8fa; }
+.source-panel span, .source-panel small { color: #8b95a1; font-size: 11px; }
+.source-panel strong { color: #333d4b; font-size: 13px; }
+.tds-cta { margin-top: 10px; }
+.tds-primary-button { width: 100%; min-height: 54px; border: 0; border-radius: 16px; background: #3182f6; color: #fff; font-size: 15px; font-weight: 700; letter-spacing: -.2px; transition: transform .12s ease, opacity .12s ease; }
+.tds-primary-button:active { transform: scale(.985); opacity: .9; }
+.dialog-loading { position: fixed; z-index: 190; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(15,23,42,.48); color: #fff; font-size: 13px; }
 .legal-sheet > h2 { margin-top: 4px; }
 .account-description { margin: -12px 0 18px; color: #6b7684; font-size: 12px; line-height: 1.55; }
 .profile-grid { display: grid; gap: 1px; margin-bottom: 18px; overflow: hidden; border-radius: 14px; background: #e5e8eb; }

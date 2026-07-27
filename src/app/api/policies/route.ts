@@ -32,6 +32,10 @@ export async function GET(req: Request) {
     ? Math.min(100, Math.max(1, Number(requestedLimit) || 30))
     : results.length;
   const items = requestedLimit ? results.slice(offset, offset + limit) : results;
+  const lastUpdated = all.reduce<string | null>((latest, policy) => {
+    if (!policy.updatedAt) return latest;
+    return !latest || policy.updatedAt > latest ? policy.updatedAt : latest;
+  }, null);
 
   return NextResponse.json(
     {
@@ -44,6 +48,8 @@ export async function GET(req: Request) {
         curated: CURATED_POLICIES.length,
         external: external.length,
       },
+      generatedAt: new Date().toISOString(),
+      lastUpdated,
       items,
     },
     { headers: { "Cache-Control": CDN_CACHE } },

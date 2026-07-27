@@ -1,6 +1,8 @@
 import { appLogin, getConsentedUserData, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import "./App.css";
+
+const TdsExternalDialog = lazy(() => import("./TdsExternalDialog"));
 
 const API_BASE = "https://kor-welfare-hub.vercel.app";
 const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
@@ -36,6 +38,7 @@ type Policy = {
   deadline?: string;
   isAlwaysOpen?: boolean;
   tags?: string[];
+  source?: string;
 };
 
 type PoliciesResponse = {
@@ -43,6 +46,17 @@ type PoliciesResponse = {
   total: number;
   hasMore: boolean;
   items: Policy[];
+  generatedAt: string;
+  lastUpdated: string | null;
+  sources: Record<string, number>;
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  bokjiro: "복지로",
+  gov24: "정부24",
+  youthcenter: "온통청년",
+  worknet: "고용24",
+  curated: "공공기관",
 };
 
 const categories = [
@@ -110,6 +124,9 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [loginAvailable, setLoginAvailable] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [externalTarget, setExternalTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/toss/session`, { credentials: "include" })
@@ -205,6 +222,8 @@ function App() {
         setCount(data.count);
         setTotal(data.total);
         setHasMore(data.hasMore);
+        setGeneratedAt(data.generatedAt);
+        setLastUpdated(data.lastUpdated);
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -305,8 +324,16 @@ function App() {
       setProfile(data.profile);
       setAccountOpen(true);
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "";
-      setAuthError(message.includes("NOT_CONFIGURED") ? "로그인 서버 설정을 완료한 뒤 사용할 수 있어요." : "토스 로그인을 완료하지 못했어요.");
+      const message = reason instanceof Error ? reason.message.toLowerCase() : "";
+      if (message.includes("not_configured")) {
+        setAuthError("로그인 준비가 아직 끝나지 않았어요. 잠시 후 다시 시도해 주세요.");
+      } else if (message.includes("cancel") || message.includes("declin") || message.includes("user_abort")) {
+        setAuthError("토스 로그인을 취소했어요. 원할 때 다시 시도할 수 있어요.");
+      } else if (!navigator.onLine || message.includes("fetch") || message.includes("network")) {
+        setAuthError("인터넷 연결이 불안정해 로그인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.");
+      } else {
+        setAuthError("토스 로그인을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -336,8 +363,15 @@ function App() {
       }
       setPage(0);
       setAccountOpen(true);
-    } catch {
-      setAuthError("동의가 취소됐거나 사용자 정보를 불러오지 못했어요.");
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message.toLowerCase() : "";
+      if (message.includes("declin") || message.includes("cancel") || message.includes("denied")) {
+        setAuthError("정보 제공에 동의하지 않았어요. 검색 조건을 직접 선택해도 모든 혜택을 확인할 수 있어요.");
+      } else if (!navigator.onLine || message.includes("fetch") || message.includes("network")) {
+        setAuthError("인터넷 연결이 불안정해 정보를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.");
+      } else {
+        setAuthError("토스 정보를 불러오지 못했어요. 잠시 후 다시 시도하거나 조건을 직접 선택해 주세요.");
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -430,6 +464,10 @@ function App() {
           ♥ 저장 {saved.size}
         </button>
       </div>
+      <div className="data-freshness" role="status">
+        <span>출처: 복지로 · 정부24 · 온통청년 · K-Startup</span>
+        <span>최종 갱신 {formatUpdatedAt(generatedAt || lastUpdated)}</span>
+      </div>
 
       {error && (
         <div className="notice error" role="alert">
@@ -491,8 +529,15 @@ function App() {
             <DetailBlock title="지원 내용" text={selected.benefit || selected.summary} />
             <DetailBlock title="신청 대상" text={selected.eligibility} />
             <DetailBlock title="신청 방법" text={selected.howTo} />
+            <div className="source-panel">
+              <span>정보 출처</span>
+              <strong>{SOURCE_LABELS[selected.source || ""] || selected.agency}</strong>
+              <small>원문 갱신일 {selected.updatedAt || "확인 필요"}</small>
+            </div>
             <p className="external-note">공공기관의 공식 페이지가 외부 브라우저에서 열려요.</p>
-            <button className="apply-button" onClick={() => void openExternal(selected.url)}>공식 기관 페이지 열기</button>
+            <div className="tds-cta">
+              <button className="tds-primary-button" onClick={() => setExternalTarget(selected.url)}>공식 기관 페이지 열기</button>
+            </div>
           </section>
         </div>
       )}
@@ -513,6 +558,18 @@ function App() {
             {profile && <button className="logout-button" disabled={authLoading} onClick={() => void handleLogout()}>로그아웃 및 연결 끊기</button>}
           </section>
         </div>
+      )}
+      {externalTarget && (
+        <Suspense fallback={<div className="dialog-loading" role="status">확인창을 준비하고 있어요.</div>}>
+          <TdsExternalDialog
+            onCancel={() => setExternalTarget(null)}
+            onConfirm={() => {
+              const url = externalTarget;
+              setExternalTarget(null);
+              void openExternal(url);
+            }}
+          />
+        </Suspense>
       )}
     </main>
   );
@@ -554,6 +611,13 @@ function DetailBlock({ title, text }: { title: string; text: string }) {
 
 function ProfileItem({ label, value }: { label: string; value: string }) {
   return <div><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function formatUpdatedAt(value: string | null): string {
+  if (!value) return "확인 중";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 export default App;

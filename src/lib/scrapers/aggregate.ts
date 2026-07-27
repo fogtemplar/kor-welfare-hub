@@ -24,7 +24,16 @@ export async function fetchExternalPolicies(): Promise<Policy[]> {
   if (memCache && Date.now() - memCache.at < MEM_TTL_MS) return memCache.items;
   if (inFlight) return inFlight;
   inFlight = aggregate()
-    .then((items) => {
+    .then(({ items, complete }) => {
+      // 일부 공공 API가 일시적으로 실패하면 불완전한 결과로 정상 캐시를
+      // 덮어쓰지 않는다. 같은 인스턴스에 기존 데이터가 있으면 stale 값을
+      // 계속 제공하고 다음 요청에서 갱신을 다시 시도한다.
+      if (!complete && memCache) {
+        console.warn(
+          `[aggregate] partial refresh (${items.length}) — keeping stale cache (${memCache.items.length})`,
+        );
+        return memCache.items;
+      }
       if (items.length > 0) memCache = { at: Date.now(), items };
       return items;
     })
@@ -34,7 +43,7 @@ export async function fetchExternalPolicies(): Promise<Policy[]> {
   return inFlight;
 }
 
-async function aggregate(): Promise<Policy[]> {
+async function aggregate(): Promise<{ items: Policy[]; complete: boolean }> {
   const tasks: Promise<Policy[]>[] = [
     fetchBokjiroPolicies(),
     fetchYouthcenterPolicies(),
@@ -44,6 +53,9 @@ async function aggregate(): Promise<Policy[]> {
   ];
   if (WORKNET_ENABLED) tasks.push(fetchWorknetPolicies());
   const results = await Promise.allSettled(tasks);
+  const complete = results.every(
+    (result) => result.status === "fulfilled" && result.value.length > 0,
+  );
   const policies: Policy[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") policies.push(...r.value);
@@ -72,5 +84,5 @@ async function aggregate(): Promise<Policy[]> {
     seen.add(key);
     deduped.push(p);
   }
-  return deduped;
+  return { items: deduped, complete };
 }
