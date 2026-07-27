@@ -37,6 +37,23 @@ function resolveOrigin(req: NextRequest): string | null {
 
   if (!origin) return null; // same-origin 요청은 CORS 헤더가 필요 없다
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
+
+  // 콜백 테스트 화면은 배포 시점에 따라 앱인토스 콘솔의 서로 다른
+  // toss.im 서브도메인에서 실행될 수 있다. 민감한 다른 API에는 이 예외를
+  // 적용하지 않고 연결 끊기 콜백에만 한정한다.
+  if (req.nextUrl.pathname === "/api/toss/unlink") {
+    try {
+      const { protocol, hostname } = new URL(origin);
+      if (
+        protocol === "https:" &&
+        (hostname === "toss.im" || hostname.endsWith(".toss.im"))
+      ) {
+        return origin;
+      }
+    } catch {
+      return null;
+    }
+  }
   return null;
 }
 

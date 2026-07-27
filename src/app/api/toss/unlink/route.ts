@@ -162,7 +162,7 @@ async function handle(req: Request) {
     );
     // 그래도 200을 준다. 등록 단계의 [테스트하기]를 통과시켜야 하고,
     // 실패를 돌려주면 토스가 불필요하게 재시도한다.
-    return NextResponse.json({ ok: true, note: "payload logged" });
+    return new NextResponse(null, { status: 200 });
   }
 
   const result = await purgeMember(found.value);
@@ -172,7 +172,7 @@ async function handle(req: Request) {
   );
 
   // 회원 존재 여부를 노출하지 않기 위해 항상 동일한 응답을 준다
-  return NextResponse.json({ ok: true });
+  return new NextResponse(null, { status: 200 });
 }
 
 export async function GET(req: Request) {
