@@ -90,7 +90,7 @@ export function removeTossAccess(accessToken: string) {
 
 export function decryptTossProfile(profile: TossProfile): TossProfile {
   const keyText = process.env.TOSS_DECRYPTION_KEY?.trim();
-  const aad = process.env.TOSS_DECRYPTION_AAD;
+  const aad = process.env.TOSS_DECRYPTION_AAD?.trim();
   if (!keyText || !aad) throw new Error("TOSS_DECRYPTION_NOT_CONFIGURED");
   const key = Buffer.from(keyText, "base64");
   if (key.length !== 32) throw new Error("TOSS_DECRYPTION_KEY_INVALID");
