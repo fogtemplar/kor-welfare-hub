@@ -46,17 +46,18 @@ export default function PrivacyPage() {
             접속 시각, IP 주소, 브라우저·기기 정보, 요청 주소
             <p className="mt-2 text-13 text-ink-tertiary">
               서비스 보안, 장애 대응과 부정 이용 방지를 위한 접속 기록입니다.
-              현재 서비스는 회원가입이나 토스 로그인을 사용하지 않습니다.
+              토스 로그인 사용 시에는 아래 로그인 정보도 서버에서 처리합니다.
             </p>
           </div>
         </div>
       </Section>
 
-      <Section heading="2. 회원가입 없이 이용할 수 있습니다">
+      <Section heading="2. 토스 로그인과 선택 이용">
         <p>
-          서비스는 별도의 회원가입이나 토스 로그인 없이 정책 조회와 저장 기능을
-          이용할 수 있습니다. 토스 로그인 기능을 도입하는 경우 수집 항목과 목적을
-          사전에 고지하고 필요한 동의를 받겠습니다.
+          정책 조회와 저장 기능은 로그인 없이 이용할 수 있습니다. 이용자가 토스
+          로그인을 선택하면 앱인토스 동의 화면에서 허용한 항목만 전달받습니다.
+          유저정보 불러오기는 토스 로그인과 별개의 선택 기능이며, 개인정보 제3자
+          제공 동의 후에만 실행됩니다.
         </p>
       </Section>
 
@@ -75,6 +76,11 @@ export default function PrivacyPage() {
                 <td className="py-2.5 pr-3">접속 로그</td>
                 <td className="py-2.5 pr-3">장애 대응·부정이용 방지</td>
                 <td className="py-2.5">3개월</td>
+              </tr>
+              <tr>
+                <td className="py-2.5 pr-3">토스 사용자 식별키, 동의한 이름·생년월일·성별·연락처 등</td>
+                <td className="py-2.5 pr-3">로그인, 회원 식별 및 맞춤형 복지 안내</td>
+                <td className="py-2.5">로그인 연결 해제 또는 동의 철회 시까지</td>
               </tr>
             </tbody>
           </table>
@@ -133,6 +139,7 @@ export default function PrivacyPage() {
           items={[
             <><strong>기기 저장 정보 삭제</strong> — 서비스 내 &lsquo;내 정보 초기화&rsquo; 또는 브라우저 데이터 삭제</>,
             <><strong>열람·정정 요청</strong> — 아래 문의처로 요청하시면 지체 없이 처리합니다</>,
+            <><strong>로그인 연결 해제</strong> — 내 정보 화면의 &lsquo;로그아웃 및 연결 끊기&rsquo; 또는 토스 앱 설정에서 처리할 수 있습니다</>,
           ]}
         />
       </Section>
@@ -142,6 +149,8 @@ export default function PrivacyPage() {
           웹에서는 브라우저 데이터를 삭제하고, 앱인토스에서는 미니앱의 저장
           데이터를 삭제하면 기기에 저장된 정보가 제거됩니다. 운영자가 보유한
           접속 기록에 대한 문의나 삭제 요청은 아래 문의처로 접수할 수 있습니다.
+          토스 로그인 연결 해제·약관 철회·토스 탈퇴 콜백을 받으면 해당 사용자의
+          로그인 세션과 보유 개인정보를 지체 없이 파기합니다.
         </p>
       </Section>
 

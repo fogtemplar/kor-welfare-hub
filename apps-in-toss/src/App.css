@@ -1,6 +1,11 @@
 #root { min-height: 100vh; }
 .app-shell { width: min(100%, 520px); margin: 0 auto; padding: calc(24px + var(--ait-safe-top, env(safe-area-inset-top))) calc(20px + var(--ait-safe-right, 0px)) calc(48px + var(--ait-safe-bottom, env(safe-area-inset-bottom))) calc(20px + var(--ait-safe-left, 0px)); box-sizing: border-box; }
 .hero { padding: 14px 0 24px; }
+.account-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.account-actions { display: flex; align-items: center; gap: 6px; }
+.account-button { flex: none; padding: 8px 12px; border: 0; border-radius: 12px; background: #3182f6; color: white; font-size: 13px; font-weight: 700; }
+.user-data-button { flex: none; padding: 8px 11px; border: 0; border-radius: 12px; background: #eaf3ff; color: #1b64da; font-size: 13px; font-weight: 700; }
+.account-button:disabled { opacity: .55; }
 .eyebrow { display: inline-flex; padding: 7px 11px; border-radius: 999px; background: #eaf3ff; color: #1b64da; font-size: 12px; font-weight: 700; }
 .hero h1 { margin: 16px 0 10px; color: #191f28; font-size: 28px; line-height: 1.3; letter-spacing: -1px; }
 .hero p { margin: 0; color: #6b7684; font-size: 15px; line-height: 1.55; }
@@ -30,6 +35,8 @@
 .notice.error { display: grid; gap: 14px; background: #fff0f1; color: #d22030; }
 .notice.error button { justify-self: center; padding: 9px 16px; border: 0; border-radius: 10px; background: #d22030; color: white; font-weight: 700; }
 .network-banner { margin-bottom: 14px; padding: 11px 14px; border-radius: 12px; background: #fff8e1; color: #8a5a00; font-size: 13px; font-weight: 650; }
+.network-banner.auth-error { background: #fff0f1; color: #d22030; }
+.personalized-banner { margin-bottom: 14px; padding: 11px 14px; border-radius: 12px; background: #e8f7ef; color: #087443; font-size: 13px; font-weight: 650; }
 .skeleton-list { display: grid; gap: 12px; }
 .skeleton { height: 150px; border-radius: 18px; background: linear-gradient(90deg, #f2f4f6 25%, #fafafa 50%, #f2f4f6 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -48,6 +55,12 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; text-de
 .apply-button { height: 54px; margin-top: 10px; }
 .external-note { margin: 10px 0 0; color: #8b95a1; font-size: 12px; text-align: center; }
 .legal-sheet > h2 { margin-top: 4px; }
+.account-description { margin: -12px 0 18px; color: #6b7684; font-size: 13px; line-height: 1.55; }
+.profile-grid { display: grid; gap: 1px; margin-bottom: 18px; overflow: hidden; border-radius: 14px; background: #e5e8eb; }
+.profile-grid > div { display: grid; gap: 4px; padding: 13px 15px; background: #f7f8fa; }
+.profile-grid span { color: #8b95a1; font-size: 12px; }
+.profile-grid strong { color: #333d4b; font-size: 14px; overflow-wrap: anywhere; }
+.logout-button { width: 100%; height: 48px; margin-top: 8px; border: 0; background: transparent; color: #6b7684; font-weight: 650; }
 button, article, select { cursor: pointer; }
 button:active, article:active { transform: scale(.98); }
 @media (min-width: 560px) { body { background: #f2f4f6; } .app-shell { min-height: 100vh; background: white; } }

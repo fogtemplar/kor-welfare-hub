@@ -39,8 +39,9 @@ function resolveOrigin(req: NextRequest): string | null {
 function corsHeaders(allowOrigin: string): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",
     ...(allowOrigin === "*" ? {} : { Vary: "Origin" }),
   };

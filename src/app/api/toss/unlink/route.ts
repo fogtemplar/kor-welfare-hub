@@ -13,10 +13,7 @@ import { timingSafeEqual } from "node:crypto";
  *   Basic Auth 헤더 아래 TOSS_UNLINK_BASIC 으로 만든 값
  *
  * 설계 메모
- *  - 회원 식별자가 어떤 파라미터명으로 오는지 문서로 확인할 수 없어서,
- *    후보 키를 모두 훑고 못 찾으면 페이로드 전체를 로그로 남긴다.
- *    콘솔의 [테스트하기]를 누른 뒤 Vercel 로그에서 실제 모양을 확인하고
- *    IDENTIFIER_KEYS 를 확정하면 된다.
+ *  - 공식 규격의 userKey를 우선 확인하고, 콘솔 테스트 호환을 위해 일부 후보도 허용한다.
  *  - 존재하지 않는 회원이어도 200을 준다(멱등). 실패를 돌려주면 토스가
  *    재시도하거나 해지가 실패한 것처럼 보일 수 있고, 회원 존재 여부를
  *    외부에 알려주는 셈이 된다.
@@ -34,8 +31,6 @@ const IDENTIFIER_KEYS = [
   "CI",
   "sub",
   "id",
-  "referrer",
-  "refreshToken",
 ];
 
 function unauthorized() {
