@@ -65,12 +65,13 @@ function checkAuth(req: Request): boolean {
 
   const got = m[1].trim();
 
-  // 환경변수에 "id:password" 로 넣었든 이미 base64 로 넣었든 둘 다 받아준다
-  const expectedB64 = expected.includes(":")
-    ? Buffer.from(expected, "utf8").toString("base64")
-    : expected;
+  // 콘솔별 콜백 규격을 모두 지원한다.
+  // - 유저정보 연동: Authorization: Basic {콘솔에 입력한 원문}
+  // - 토스 로그인:   콘솔 값을 Base64 인코딩한 뒤 Authorization 헤더로 전달
+  // 동일한 비밀값을 두 콘솔에서 공유해도 어느 쪽 요청인지에 따라 검증된다.
+  const expectedB64 = Buffer.from(expected, "utf8").toString("base64");
 
-  return safeEqual(got, expectedB64);
+  return safeEqual(got, expected) || safeEqual(got, expectedB64);
 }
 
 /** 쿼리스트링과 본문에서 회원 식별자를 찾아낸다 */
