@@ -3,7 +3,7 @@ import { LegalPage, Section, Note, Bullets } from "../legal-layout";
 
 export const metadata: Metadata = {
   title: "개인정보 처리방침",
-  description: "kor-welfare-hub 개인정보 처리방침",
+  description: "나라가쏜다 개인정보 처리방침",
 };
 
 const EFFECTIVE = "2026년 7월 27일";

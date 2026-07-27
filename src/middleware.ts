@@ -12,6 +12,8 @@ import type { NextRequest } from "next/server";
 //  - /api/ai/*          : 허용 목록에 있는 오리진만. 목록 밖이면 CORS 헤더 없음
 //                         → 브라우저가 cross-origin 호출을 차단한다.
 const BUILT_IN_ORIGINS = [
+  "https://bokji.apps.tossmini.com",
+  "https://bokji.private-apps.tossmini.com",
   "https://kor-welfare-hub.apps.tossmini.com",
   "https://kor-welfare-hub.private-apps.tossmini.com",
   "http://localhost:5173",

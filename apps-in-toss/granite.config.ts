@@ -1,9 +1,9 @@
 import { defineConfig } from "@apps-in-toss/web-framework/config";
 
 export default defineConfig({
-  appName: "kor-welfare-hub",
+  appName: "bokji",
   brand: {
-    displayName: "복지모아",
+    displayName: "나라가쏜다",
     primaryColor: "#3182F6",
     icon: "https://kor-welfare-hub.vercel.app/app-icon.svg",
   },

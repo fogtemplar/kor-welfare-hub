@@ -486,7 +486,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
           </>
         ) : (
           <>
-            <DetailBlock title="서비스 성격" text="복지모아는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
+            <DetailBlock title="서비스 성격" text="나라가쏜다는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
             <DetailBlock title="정보 확인" text="공공기관의 변경 사항이 반영되기까지 시차가 있을 수 있어요. 신청 조건, 금액, 마감일은 반드시 공식 기관 페이지에서 최종 확인해 주세요." />
             <DetailBlock title="외부 페이지" text="공식 기관 페이지를 열면 해당 기관의 이용약관과 개인정보처리방침이 적용돼요." />
             <DetailBlock title="문의" text="서비스 문의: fogtemplar@gmail.com" />

@@ -1,4 +1,4 @@
-# 복지모아 Apps in Toss
+# 나라가쏜다 Apps in Toss
 
 앱인토스 WebView용 경량 프런트엔드입니다. 정책 데이터는 운영 중인
 `https://kor-welfare-hub.vercel.app/api/policies`에서 페이지 단위로 가져옵니다.

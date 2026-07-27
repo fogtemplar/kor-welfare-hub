@@ -3,7 +3,7 @@ import { LegalPage, Section, Note, Bullets } from "../legal-layout";
 
 export const metadata: Metadata = {
   title: "이용약관",
-  description: "kor-welfare-hub 이용약관",
+  description: "나라가쏜다 이용약관",
 };
 
 const EFFECTIVE = "2026년 7월 27일";
@@ -20,7 +20,7 @@ export default function TermsPage() {
 
       <Section heading="제1조 (목적)">
         <p>
-          이 약관은 회원이 kor-welfare-hub(이하 &ldquo;서비스&rdquo;)를 이용할 때
+          이 약관은 회원이 나라가쏜다(이하 &ldquo;서비스&rdquo;)를 이용할 때
           서비스와 회원 사이의 권리·의무 및 책임사항을 정하는 것을 목적으로 합니다.
         </p>
       </Section>
