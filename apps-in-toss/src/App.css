@@ -96,7 +96,8 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .profile-grid > div { display: grid; gap: 4px; padding: 13px 15px; background: #f7f8fa; }
 .profile-grid span { color: #8b95a1; font-size: 11px; }
 .profile-grid strong { color: #333d4b; font-size: 13px; overflow-wrap: anywhere; }
-.logout-button { width: 100%; height: 48px; margin-top: 8px; border: 0; background: transparent; color: #6b7684; font-size: 13px; font-weight: 650; }
+.logout-button, .reset-button { width: 100%; height: 48px; margin-top: 8px; border: 0; border-radius: 13px; background: transparent; color: #6b7684; font-size: 13px; font-weight: 650; }
+.reset-button { background: #f2f4f6; color: #4e5968; }
 
 @media (max-width: 374px) {
   .app-shell { padding-left: 14px; padding-right: 14px; }

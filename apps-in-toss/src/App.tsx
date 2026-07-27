@@ -102,6 +102,8 @@ function App() {
   const [legal, setLegal] = useState<"terms" | "privacy" | null>(null);
   const [savedOnly, setSavedOnly] = useState(false);
   const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [savedItems, setSavedItems] = useState<Policy[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
   const [profile, setProfile] = useState<TossProfile | null>(null);
   const [consentedData, setConsentedData] = useState<ConsentedData | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -215,9 +217,39 @@ function App() {
     return () => controller.abort();
   }, [age, category, debouncedQuery, page, region, retryNonce]);
 
+  useEffect(() => {
+    if (!savedOnly) return;
+    if (saved.size === 0) {
+      setSavedItems([]);
+      return;
+    }
+    const controller = new AbortController();
+    setSavedLoading(true);
+    fetch(`${API_BASE}/api/policies/saved`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [...saved] }),
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{ items: Policy[] }>;
+      })
+      .then((data) => setSavedItems(data.items))
+      .catch((reason: unknown) => {
+        if (!(reason instanceof DOMException && reason.name === "AbortError")) {
+          setAuthError("저장한 혜택을 불러오지 못했어요.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSavedLoading(false);
+      });
+    return () => controller.abort();
+  }, [saved, savedOnly]);
+
   const visibleItems = useMemo(
-    () => (savedOnly ? items.filter((policy) => saved.has(policy.id)) : items),
-    [items, saved, savedOnly],
+    () => (savedOnly ? savedItems : items),
+    [items, savedItems, savedOnly],
   );
 
   const changeCategory = (next: string) => {
@@ -323,6 +355,15 @@ function App() {
     }
   };
 
+  const resetPersonalization = () => {
+    setConsentedData(null);
+    setAge(null);
+    setRegion("전국");
+    setPage(0);
+    setAccountOpen(false);
+    setAuthError("");
+  };
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -384,7 +425,7 @@ function App() {
       </nav>
 
       <div className="list-heading">
-        <div><span>{savedOnly ? "저장한 혜택" : "지금 확인할 수 있는 혜택"}</span><strong>{savedOnly ? `${visibleItems.length}개` : `${count.toLocaleString()}개`}</strong></div>
+        <div><span>{savedOnly ? "저장한 혜택" : "지금 확인할 수 있는 혜택"}</span><strong>{savedOnly ? `${saved.size}개` : `${count.toLocaleString()}개`}</strong></div>
         <button aria-pressed={savedOnly} className={savedOnly ? "saved-filter active" : "saved-filter"} onClick={() => setSavedOnly((value) => !value)}>
           ♥ 저장 {saved.size}
         </button>
@@ -396,7 +437,7 @@ function App() {
           <button onClick={() => setRetryNonce((value) => value + 1)}>다시 시도</button>
         </div>
       )}
-      {loading && page === 0 ? (
+      {(loading && page === 0) || (savedOnly && savedLoading) ? (
         <div className="skeleton-list" aria-label="혜택을 불러오는 중" aria-busy="true">
           {[0, 1, 2].map((item) => <div className="skeleton" key={item} />)}
         </div>
@@ -465,11 +506,10 @@ function App() {
             <p className="account-description">동의한 정보만 표시하며, 유저정보 불러오기 결과는 서버에 저장하지 않아요.</p>
             <div className="profile-grid">
               {(consentedData?.USER_BIRTHDAY || profile?.birthday) && <ProfileItem label="생년월일" value={consentedData?.USER_BIRTHDAY || profile?.birthday || ""} />}
-              {(consentedData?.USER_GENDER || profile?.gender) && <ProfileItem label="성별" value={consentedData?.USER_GENDER || profile?.gender || ""} />}
               {consentedData?.USER_ADDRESS && <ProfileItem label="주소" value={consentedData.USER_ADDRESS} />}
-              {(consentedData?.USER_EMAIL || profile?.email) && <ProfileItem label="이메일" value={consentedData?.USER_EMAIL || profile?.email || ""} />}
             </div>
             <button className="apply-button" disabled={authLoading} onClick={() => void handleUserData()}>내 정보 다시 불러오기</button>
+            {consentedData && <button className="reset-button" onClick={resetPersonalization}>맞춤 조건 초기화</button>}
             {profile && <button className="logout-button" disabled={authLoading} onClick={() => void handleLogout()}>로그아웃 및 연결 끊기</button>}
           </section>
         </div>
