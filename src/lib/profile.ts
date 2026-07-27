@@ -1,4 +1,5 @@
 import type { Policy } from "@/lib/types";
+import { ageFitsStages, stageLabel } from "@/lib/lifeStage";
 
 export type Gender = "female" | "male" | "na";
 export type Household =
@@ -217,6 +218,24 @@ export function matchPolicy(policy: Policy, profile: Profile): MatchResult {
     }
   }
 
+  // 생애주기 기반 연령 신호(근사치): 명시적 연령 조건이 없을 때만,
+  // 차단하지 않고 가점/감점으로만 반영한다.
+  else if (
+    candidateAges.length > 0 &&
+    policy.lifeStages &&
+    policy.lifeStages.length > 0
+  ) {
+    const fits = candidateAges.some((a) => ageFitsStages(a, policy.lifeStages!));
+    const labels = policy.lifeStages.map(stageLabel).join("·");
+    if (fits) {
+      score += 18;
+      reasons.push(`생애주기 일치 (${labels})`);
+    } else {
+      // 오차단을 피하기 위해 blocker 대신 감점만 준다
+      score -= 12;
+    }
+  }
+
   const region = profile.region ?? "전국";
   if (region !== "전국" && policy.region && policy.region !== "전국") {
     if (policy.region === region) {
@@ -245,6 +264,9 @@ export function matchPolicy(policy: Policy, profile: Profile): MatchResult {
   const tokens = deriveTokens(profile);
   let audienceHits = 0;
   for (const tag of policy.audience) {
+    // "전국민"은 모든 사용자 토큰에 항상 존재해 변별력이 없다.
+    // 이전엔 이 태그만으로 +15점이 붙어 추천 순위를 왜곡했다.
+    if (tag === "전국민") continue;
     if (tokens.includes(tag)) {
       audienceHits++;
       reasons.push(`대상 적합 (${tag})`);
@@ -260,6 +282,7 @@ export function matchPolicy(policy: Policy, profile: Profile): MatchResult {
     }
   }
 
+  if (score < 0) score = 0;
   if (score === 0 && blockers.length === 0) score = 5;
   if (score > 100) score = 100;
 

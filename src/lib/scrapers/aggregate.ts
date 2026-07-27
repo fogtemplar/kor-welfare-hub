@@ -6,6 +6,7 @@ import { fetchWorknetPolicies } from "./worknet";
 import { fetchKStartupPolicies } from "./kstartup";
 import { fetchGovServicePolicies } from "./govService";
 import { refineRegion } from "@/lib/regionMap";
+import { enrichAge } from "@/lib/lifeStage";
 
 // 워크넷(고용24) endpoint 정확한 URL 확인 전까지 비활성화
 const WORKNET_ENABLED = process.env.WORKNET_ENABLE === "true";
@@ -13,7 +14,27 @@ const WORKNET_ENABLED = process.env.WORKNET_ENABLE === "true";
 // 정책브리핑(korea.kr) RSS는 뉴스 기사라 복지 혜택 매칭에 부적합 → 제거
 // 필요 시 다시 추가: import { fetchKoreaKrPolicyNews } from "./korea-kr";
 
+// 프로세스 메모리 캐시 + in-flight 중복 제거.
+// 같은 인스턴스에서 동시 요청 10건이 들어와도 상류 호출은 1회만 나간다.
+const MEM_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+let memCache: { at: number; items: Policy[] } | null = null;
+let inFlight: Promise<Policy[]> | null = null;
+
 export async function fetchExternalPolicies(): Promise<Policy[]> {
+  if (memCache && Date.now() - memCache.at < MEM_TTL_MS) return memCache.items;
+  if (inFlight) return inFlight;
+  inFlight = aggregate()
+    .then((items) => {
+      if (items.length > 0) memCache = { at: Date.now(), items };
+      return items;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
+  return inFlight;
+}
+
+async function aggregate(): Promise<Policy[]> {
   const tasks: Promise<Policy[]>[] = [
     fetchBokjiroPolicies(),
     fetchYouthcenterPolicies(),
@@ -27,6 +48,12 @@ export async function fetchExternalPolicies(): Promise<Policy[]> {
   for (const r of results) {
     if (r.status === "fulfilled") policies.push(...r.value);
   }
+  // 후처리 0: 소스 구분 없이, 본문에 명시된 연령 조건("만 19세~34세" 등)을
+  // 구조화 필드로 끌어올린다. 명시적 표현만 처리하므로 오차단 위험이 낮다.
+  for (const p of policies) {
+    enrichAge(p, { texts: [p.title, p.eligibility, p.summary] });
+  }
+
   // 후처리 1: region이 "전국"이지만 제목·기관·요약에 시·군·구 키워드 있으면 시도로 보정
   for (const p of policies) {
     const refined = refineRegion(p.region ?? "전국", p.title, p.agency, p.summary);

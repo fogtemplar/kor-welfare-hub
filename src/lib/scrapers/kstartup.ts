@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Policy } from "@/lib/types";
+import { CACHE_DIR } from "./cacheDir";
 
 // 창업진흥원_K-Startup 사업공고 OpenAPI
 // 신청: https://www.data.go.kr/data/15121654/openapi.do (또는 검색 "창업진흥원 K-Startup")
@@ -13,7 +14,6 @@ const MAX_PAGES = 30;
 const CONCURRENCY = 4;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
 const CACHE_FILE = path.join(CACHE_DIR, "kstartup.json");
 
 type CacheShape = { fetchedAt: number; items: Policy[] };
@@ -74,7 +74,7 @@ async function fetchPage(
 
   try {
     const res = await fetch(url.toString(), {
-      cache: "no-store",
+      next: { revalidate: 86400 }, // Vercel Data Cache 24h (was: no-store)
       headers: { "User-Agent": "kor-welfare-hub/0.1" },
     });
     if (res.status === 403) {

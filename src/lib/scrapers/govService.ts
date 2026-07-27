@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Policy, PolicyCategory } from "@/lib/types";
+import { CACHE_DIR } from "./cacheDir";
 
 // 행정안전부_대한민국 공공서비스(혜택) 정보
 // 신청: data.go.kr 검색 "행정안전부 공공서비스 혜택"
@@ -13,7 +14,6 @@ const MAX_PAGES = 30; // 안전 캡 (15,000건)
 const CONCURRENCY = 4;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
 const CACHE_FILE = path.join(CACHE_DIR, "govService.json");
 
 type CacheShape = { fetchedAt: number; items: Policy[] };
@@ -75,7 +75,7 @@ async function fetchPage(
 
   try {
     const res = await fetch(url.toString(), {
-      cache: "no-store",
+      next: { revalidate: 86400 }, // Vercel Data Cache 24h (was: no-store)
       headers: { "User-Agent": "kor-welfare-hub/0.1" },
     });
     if (!res.ok) {
@@ -248,7 +248,8 @@ function inferCategory(field: string, text: string): PolicyCategory {
   if (/(노인|어르신)/.test(text)) return "senior";
   if (/(장애)/.test(text)) return "disability";
   if (/(저소득|기초생활|차상위)/.test(text)) return "lowincome";
-  return "lowincome";
+  // 분류 실패를 "lowincome"으로 떨구면 긴급·생계 카테고리가 오염된다.
+  return "etc";
 }
 
 function deriveAudience(userType: string, blob: string, target: string): string[] {

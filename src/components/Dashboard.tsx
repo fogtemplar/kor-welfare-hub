@@ -29,7 +29,40 @@ type ScoredPolicy = Policy & {
   __match?: MatchResult;
 };
 
-export function Dashboard({ policies }: { policies: Policy[] }) {
+export function Dashboard({
+  policies: initialPolicies,
+  totalCount,
+}: {
+  policies: Policy[];
+  totalCount?: number;
+}) {
+  // 서버는 첫 화면용 일부만 심어 보낸다(RSC 페이로드 축소).
+  // 전체 목록은 마운트 후 CDN 캐시된 /api/policies 에서 받아 교체한다.
+  const [policies, setPolicies] = useState<Policy[]>(initialPolicies);
+  const [fullLoaded, setFullLoaded] = useState(
+    typeof totalCount !== "number" || initialPolicies.length >= totalCount,
+  );
+
+  useEffect(() => {
+    if (fullLoaded) return;
+    let cancelled = false;
+    fetch("/api/policies")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.items?.length) return;
+        setPolicies(d.items as Policy[]);
+        setFullLoaded(true);
+      })
+      .catch(() => {
+        /* 실패해도 초기 목록으로 계속 동작 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fullLoaded]);
+
+  const displayTotal = totalCount ?? policies.length;
+
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER);
   const [selected, setSelected] = useState<Policy | null>(null);
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
@@ -119,7 +152,7 @@ export function Dashboard({ policies }: { policies: Policy[] }) {
         <header className="mb-10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent-subtle text-13 font-semibold text-accent-dark mb-4">
             <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-            정부 혜택 {policies.length.toLocaleString()}개 통합
+            정부 혜택 {displayTotal.toLocaleString()}개 통합
           </div>
           <h1 className="text-26 sm:text-32 font-bold text-ink leading-tight tracking-tight">
             받을 수 있는 정부 혜택,<br className="sm:hidden" /> 다 모아봤어요

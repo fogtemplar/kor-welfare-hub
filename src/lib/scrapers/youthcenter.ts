@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Policy, PolicyCategory } from "@/lib/types";
+import { CACHE_DIR } from "./cacheDir";
 
 // 온통청년 (청년정책 통합) API v2
 // 신청: https://www.youthcenter.go.kr/opi/openApiList.do
@@ -12,7 +13,6 @@ const MAX_PAGES = 30; // 약 3,000건 한도
 const CONCURRENCY = 4;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
 const CACHE_FILE = path.join(CACHE_DIR, "youthcenter.json");
 
 type CacheShape = { fetchedAt: number; items: Policy[] };
@@ -79,7 +79,7 @@ async function fetchPage(
 
   try {
     const res = await fetch(url.toString(), {
-      cache: "no-store",
+      next: { revalidate: 86400 }, // Vercel Data Cache 24h (was: no-store)
       headers: { "User-Agent": "kor-welfare-hub/0.1" },
     });
     if (!res.ok) {

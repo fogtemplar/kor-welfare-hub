@@ -1,3 +1,11 @@
+export type LifeStage =
+  | "infant"    // 영유아
+  | "child"     // 아동
+  | "teen"      // 청소년
+  | "young"     // 청년
+  | "middle"    // 중장년
+  | "senior";   // 노년
+
 export type PolicyCategory =
   | "youth"
   | "housing"
@@ -10,7 +18,8 @@ export type PolicyCategory =
   | "lowincome"
   | "health"
   | "farm"
-  | "culture";
+  | "culture"
+  | "etc";
 
 export type PolicyLevel = "national" | "metro" | "local";
 
@@ -33,6 +42,11 @@ export type Policy = {
   audience: string[];
   ageMin?: number;
   ageMax?: number;
+  /**
+   * 생애주기 기반 연령 추정치(복지로 lifeArray 등).
+   * ageMin/ageMax와 달리 근사치이므로 차단이 아니라 가점에만 쓴다.
+   */
+  lifeStages?: LifeStage[];
   incomeMaxPct?: number;
   summary: string;
   benefit: string;
@@ -138,6 +152,15 @@ export const CATEGORIES: CategoryMeta[] = [
     emoji: "🎟️",
     description: "문화누리·체육·관광",
     color: "bg-violet-50 text-violet-700",
+  },
+  {
+    // 분류 규칙에 걸리지 않은 정책. 이전엔 전부 "lowincome"으로 떨어져
+    // 긴급·생계 카테고리 건수를 부풀리고 필터 결과를 오염시켰다.
+    key: "etc",
+    label: "기타",
+    emoji: "📋",
+    description: "아직 분류되지 않은 정책",
+    color: "bg-slate-100 text-slate-600",
   },
 ];
 

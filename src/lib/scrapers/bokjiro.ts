@@ -2,6 +2,8 @@ import * as cheerio from "cheerio";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Policy, PolicyCategory } from "@/lib/types";
+import { enrichAge } from "@/lib/lifeStage";
+import { CACHE_DIR } from "./cacheDir";
 
 // 한국사회보장정보원 — 같은 키로 두 엔드포인트 모두 호출 가능
 const CENTRAL_ENDPOINT =
@@ -22,7 +24,6 @@ const CONCURRENCY = 4;        // parallel page fetches (API tolerates ~5/s)
 const REVALIDATE_SECONDS = 86400; // 24h CDN revalidate
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h disk cache
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
 const CACHE_FILE = path.join(CACHE_DIR, "bokjiro.json");
 
 type CacheShape = { fetchedAt: number; items: Policy[] };
@@ -184,7 +185,7 @@ function parseBokjiroXml(xml: string, tag: "central" | "local" = "central"): Pol
     const level: Policy["level"] = sggNm ? "local" : ctpvNm ? "metro" : "national";
     const blob = `${servNm} ${servDgst} ${intrsThemaArray} ${trgterIndvdlArray} ${lifeArray}`;
 
-    out.push({
+    const policy: Policy = {
       id: `bokjiro-${tag}-${servId}`,
       title: servNm,
       agency,
@@ -203,7 +204,13 @@ function parseBokjiroXml(xml: string, tag: "central" | "local" = "central"): Pol
       source: "bokjiro",
       updatedAt: new Date().toISOString().slice(0, 10),
       tags: ["복지로", tag === "local" ? "지자체" : "중앙부처", ...tokensFromMeta(intrsThemaArray, lifeArray)],
-    });
+    };
+
+    // 복지로 목록 API는 lifeArray(생애주기)를 이미 내려주는데
+    // 기존 코드는 태그 생성에만 쓰고 버렸다. 연령 신호로 활용한다.
+    enrichAge(policy, { lifeRaw: lifeArray, texts: [servNm, servDgst] });
+
+    out.push(policy);
   });
 
   return out;
@@ -251,7 +258,8 @@ function inferCategory(text: string): PolicyCategory {
   if (/(의료|건강|병원|진료|치료|예방접종)/.test(text)) return "health";
   if (/(농어업|농업|어업|수산|귀농|영농)/.test(text)) return "farm";
   if (/(문화|여가|체육|관광|예술)/.test(text)) return "culture";
-  return "lowincome";
+  // 분류 실패를 "lowincome"으로 떨구면 긴급·생계 카테고리가 오염된다.
+  return "etc";
 }
 
 function deriveAudience(text: string): string[] {

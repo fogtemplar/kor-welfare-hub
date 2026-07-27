@@ -1,26 +1,51 @@
 import { NextResponse } from "next/server";
 import { CURATED_POLICIES } from "@/lib/data/policies";
 import { fetchExternalPolicies } from "@/lib/scrapers/aggregate";
-import { recommend } from "@/lib/ai/gemini";
+import { recommend, SafetyBlockedError } from "@/lib/ai/gemini";
 import type { Policy } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-// 간단한 IP별 rate limit (메모리 기반, 단일 인스턴스 환경 가정)
+// rate limit (메모리 기반).
+// 주의: 서버리스는 인스턴스마다 메모리가 따로라 IP별 한도는 인스턴스 수만큼
+// 늘어난다. 완전한 방어가 아니므로, 인스턴스별 총량 상한(GLOBAL_MAX)을
+// 함께 두어 최악의 경우 청구액을 유한하게 묶는다.
+// 정확한 전역 제한이 필요하면 Upstash Redis 등 외부 저장소로 옮길 것.
 const requestLog = new Map<string, number[]>();
+const globalLog: number[] = [];
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1시간
-const RATE_LIMIT_MAX = 10; // IP당 시간당 10회
+const RATE_LIMIT_MAX = Number(process.env.AI_RATE_LIMIT_PER_IP ?? 10);
+const GLOBAL_MAX = Number(process.env.AI_RATE_LIMIT_GLOBAL ?? 300);
 
-function checkRateLimit(ip: string): boolean {
+function prune(arr: number[], now: number): number[] {
+  return arr.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+}
+
+function checkRateLimit(ip: string): "ok" | "ip" | "global" {
   const now = Date.now();
-  const arr = (requestLog.get(ip) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+
+  const g = prune(globalLog, now);
+  globalLog.length = 0;
+  globalLog.push(...g);
+  if (g.length >= GLOBAL_MAX) return "global";
+
+  const arr = prune(requestLog.get(ip) ?? [], now);
   if (arr.length >= RATE_LIMIT_MAX) {
     requestLog.set(ip, arr);
-    return false;
+    return "ip";
   }
   arr.push(now);
   requestLog.set(ip, arr);
-  return true;
+  globalLog.push(now);
+
+  // 메모리 누수 방지: 키가 너무 많이 쌓이면 오래된 것부터 정리
+  if (requestLog.size > 5000) {
+    for (const [k, v] of requestLog) {
+      if (prune(v, now).length === 0) requestLog.delete(k);
+      if (requestLog.size <= 2500) break;
+    }
+  }
+  return "ok";
 }
 
 export async function POST(req: Request) {
@@ -29,10 +54,16 @@ export async function POST(req: Request) {
     req.headers.get("x-real-ip") ||
     "anon";
 
-  if (!checkRateLimit(ip)) {
+  const limit = checkRateLimit(ip);
+  if (limit !== "ok") {
     return NextResponse.json(
-      { error: "Too many requests. 시간당 10회 한도 초과." },
-      { status: 429 },
+      {
+        error:
+          limit === "global"
+            ? "AI 추천 사용량이 일시적으로 많습니다. 잠시 후 다시 시도해주세요."
+            : `Too many requests. 시간당 ${RATE_LIMIT_MAX}회 한도 초과.`,
+      },
+      { status: 429, headers: { "Retry-After": "600" } },
     );
   }
 
@@ -87,6 +118,12 @@ export async function POST(req: Request) {
       recommendations,
     });
   } catch (e: any) {
+    if (e instanceof SafetyBlockedError) {
+      return NextResponse.json(
+        { error: "입력 내용을 처리할 수 없습니다. 상황을 다르게 표현해 보세요." },
+        { status: 400 },
+      );
+    }
     console.error("[ai/recommend] failed:", e);
     return NextResponse.json(
       { error: "AI 추천 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." },

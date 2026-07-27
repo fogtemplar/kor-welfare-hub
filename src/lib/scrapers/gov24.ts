@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Policy, PolicyCategory } from "@/lib/types";
+import { CACHE_DIR } from "./cacheDir";
 
 // 정부24 안내서비스 API (행정안전부)
 // 신청: https://www.data.go.kr/data/15077048/openapi.do
@@ -14,7 +15,6 @@ const MAX_PAGES = 30;
 const CONCURRENCY = 4;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
 const CACHE_FILE = path.join(CACHE_DIR, "gov24.json");
 
 type CacheShape = { fetchedAt: number; items: Policy[] };
@@ -55,7 +55,7 @@ async function fetchPage(
 
   try {
     const res = await fetch(url.toString(), {
-      cache: "no-store",
+      next: { revalidate: 86400 }, // Vercel Data Cache 24h (was: no-store)
       headers: { "User-Agent": "kor-welfare-hub/0.1" },
     });
     if (!res.ok) return null;
@@ -179,11 +179,15 @@ function inferCategory(text: string): PolicyCategory {
   if (/(의료|건강|병원|진료)/.test(text)) return "health";
   if (/(농업|어업|귀농)/.test(text)) return "farm";
   if (/(문화|여가|체육|관광)/.test(text)) return "culture";
-  return "lowincome";
+  // 분류 실패를 "lowincome"으로 떨구면 긴급·생계 카테고리가 오염된다.
+  return "etc";
 }
 
 function deriveAudience(text: string): string[] {
-  const out = new Set<string>(["전국민"]);
+  // 이전엔 "전국민"을 항상 포함시켰다. 사용자 토큰에도 항상 "전국민"이
+  // 있어서 정부24 정책 전건이 무조건 대상 일치 가점을 받았다.
+  // 다른 스크래퍼(bokjiro/govService)와 동일하게, 매칭된 게 없을 때만 넣는다.
+  const out = new Set<string>();
   const rules: [RegExp, string][] = [
     [/청년/, "청년"], [/노인|어르신/, "노인"], [/아동/, "아동가구"],
     [/영유아|영아/, "영아가구"], [/임산부|임신/, "임산부"], [/출산/, "출산가구"],
@@ -194,5 +198,6 @@ function deriveAudience(text: string): string[] {
     [/여성|경력단절/, "여성"],
   ];
   for (const [re, tag] of rules) if (re.test(text)) out.add(tag);
+  if (out.size === 0) out.add("전국민");
   return Array.from(out);
 }

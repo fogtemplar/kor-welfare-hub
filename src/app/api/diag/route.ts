@@ -62,10 +62,24 @@ async function debugBokjiroPage(pageSize: number) {
   return out;
 }
 
-export async function GET() {
-  return NextResponse.json({
-    at: new Date().toISOString(),
-    smallPage: await debugBokjiroPage(5),
-    bigPage: await debugBokjiroPage(500),
-  });
+// 디버그 전용. 공개되면 상류 API 원본 응답 일부와 키 설정 여부가 노출된다.
+// 프로덕션에서는 CRON_SECRET 보유자만 접근 가능.
+export async function GET(req: Request) {
+  const secret = process.env.CRON_SECRET;
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd) {
+    const auth = req.headers.get("authorization");
+    if (!secret || auth !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+  }
+
+  return NextResponse.json(
+    {
+      at: new Date().toISOString(),
+      smallPage: await debugBokjiroPage(5),
+      bigPage: await debugBokjiroPage(500),
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
