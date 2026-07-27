@@ -11,9 +11,21 @@ export default defineConfig({
     host: "localhost",
     port: 5173,
     commands: {
-      dev: "vite dev",
+      dev: "vite dev --host 0.0.0.0",
       build: "vite build",
     },
+  },
+  webViewProps: {
+    type: "partner",
+    bounces: true,
+    pullToRefreshEnabled: true,
+    allowsBackForwardNavigationGestures: true,
+  },
+  navigationBar: {
+    withBackButton: false,
+    withHomeButton: true,
+    withTitle: true,
+    theme: "light",
   },
   permissions: [],
   outdir: "dist",

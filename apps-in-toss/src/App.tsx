@@ -1,4 +1,4 @@
-import { openURL } from "@apps-in-toss/web-framework";
+import { openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
@@ -40,8 +40,12 @@ const categories = [
   ["startup", "창업"],
   ["education", "교육"],
   ["senior", "노인"],
+  ["disability", "장애"],
   ["health", "의료"],
   ["lowincome", "긴급·생계"],
+  ["farm", "농어업"],
+  ["culture", "문화"],
+  ["etc", "기타"],
 ] as const;
 
 const regions = [
@@ -77,15 +81,59 @@ function App() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retryNonce, setRetryNonce] = useState(0);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const [selected, setSelected] = useState<Policy | null>(null);
+  const [legal, setLegal] = useState<"terms" | "privacy" | null>(null);
   const [savedOnly, setSavedOnly] = useState(false);
-  const [saved, setSaved] = useState<Set<string>>(() => {
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let active = true;
+    const loadSaved = async () => {
+      let value: string | null = null;
+      try {
+        value = await Storage.getItem(SAVED_KEY);
+      } catch {
+        value = localStorage.getItem(SAVED_KEY);
+      }
+      if (!active || !value) return;
+      try {
+        setSaved(new Set(JSON.parse(value) as string[]));
+      } catch {
+        // 손상된 저장값은 빈 목록으로 복구해요.
+      }
+    };
+    void loadSaved();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const applyInsets = (insets: { top: number; right: number; bottom: number; left: number }) => {
+      const root = document.documentElement;
+      root.style.setProperty("--ait-safe-top", `${insets.top}px`);
+      root.style.setProperty("--ait-safe-right", `${insets.right}px`);
+      root.style.setProperty("--ait-safe-bottom", `${insets.bottom}px`);
+      root.style.setProperty("--ait-safe-left", `${insets.left}px`);
+    };
     try {
-      return new Set(JSON.parse(localStorage.getItem(SAVED_KEY) ?? "[]") as string[]);
+      applyInsets(SafeAreaInsets.get());
+      return SafeAreaInsets.subscribe({ onEvent: applyInsets });
     } catch {
-      return new Set();
+      return undefined;
     }
-  });
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -105,6 +153,12 @@ function App() {
       region,
     });
 
+    if (!navigator.onLine) {
+      setOnline(false);
+      setError("인터넷 연결을 확인해 주세요.");
+      setLoading(false);
+      return () => controller.abort();
+    }
     setLoading(true);
     setError("");
     fetch(`${API_BASE}/api/policies?${params}`, { signal: controller.signal })
@@ -120,14 +174,14 @@ function App() {
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
-        setError("혜택 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+        setError(navigator.onLine ? "혜택 정보를 불러오지 못했어요." : "인터넷 연결을 확인해 주세요.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
 
     return () => controller.abort();
-  }, [category, debouncedQuery, page, region]);
+  }, [category, debouncedQuery, page, region, retryNonce]);
 
   const visibleItems = useMemo(
     () => (savedOnly ? items.filter((policy) => saved.has(policy.id)) : items),
@@ -144,12 +198,21 @@ function App() {
     setPage(0);
   };
 
+  const persistSaved = async (next: Set<string>) => {
+    const value = JSON.stringify([...next]);
+    try {
+      await Storage.setItem(SAVED_KEY, value);
+    } catch {
+      localStorage.setItem(SAVED_KEY, value);
+    }
+  };
+
   const toggleSaved = (id: string) => {
     setSaved((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      localStorage.setItem(SAVED_KEY, JSON.stringify([...next]));
+      void persistSaved(next);
       return next;
     });
   };
@@ -170,6 +233,8 @@ function App() {
         <p>복지로·정부24·청년정책을 한곳에서 확인할 수 있어요.</p>
       </header>
 
+      {!online && <div className="network-banner" role="status">오프라인 상태예요. 연결되면 다시 시도해 주세요.</div>}
+
       <section className="search-panel" aria-label="혜택 검색">
         <label className="search-box">
           <span aria-hidden="true">⌕</span>
@@ -189,6 +254,7 @@ function App() {
           <button
             key={key}
             className={category === key ? "active" : ""}
+            aria-pressed={category === key}
             onClick={() => changeCategory(key)}
           >
             {label}
@@ -198,14 +264,19 @@ function App() {
 
       <div className="list-heading">
         <strong>{savedOnly ? `저장한 혜택 ${visibleItems.length}건` : `${count.toLocaleString()}건의 혜택`}</strong>
-        <button className={savedOnly ? "saved-filter active" : "saved-filter"} onClick={() => setSavedOnly((value) => !value)}>
+        <button aria-pressed={savedOnly} className={savedOnly ? "saved-filter active" : "saved-filter"} onClick={() => setSavedOnly((value) => !value)}>
           ♥ 저장 {saved.size}
         </button>
       </div>
 
-      {error && <div className="notice error">{error}</div>}
+      {error && (
+        <div className="notice error" role="alert">
+          <span>{error}</span>
+          <button onClick={() => setRetryNonce((value) => value + 1)}>다시 시도</button>
+        </div>
+      )}
       {loading && page === 0 ? (
-        <div className="skeleton-list" aria-label="불러오는 중">
+        <div className="skeleton-list" aria-label="혜택을 불러오는 중" aria-busy="true">
           {[0, 1, 2].map((item) => <div className="skeleton" key={item} />)}
         </div>
       ) : visibleItems.length === 0 ? (
@@ -213,7 +284,7 @@ function App() {
       ) : (
         <section className="policy-list">
           {visibleItems.map((policy) => (
-            <article className="policy-card" key={policy.id} onClick={() => setSelected(policy)}>
+            <article className="policy-card" key={policy.id}>
               <div className="card-topline">
                 <span>{policy.region || (policy.level === "national" ? "전국" : "지역")}</span>
                 <button
@@ -224,9 +295,11 @@ function App() {
                   ♥
                 </button>
               </div>
-              <h2>{policy.title}</h2>
-              <p>{policy.summary || policy.benefit}</p>
-              <small>{policy.agency}</small>
+              <button className="card-main" onClick={() => setSelected(policy)}>
+                <h2>{policy.title}</h2>
+                <p>{policy.summary || policy.benefit}</p>
+                <small>{policy.agency}</small>
+              </button>
             </article>
           ))}
         </section>
@@ -241,8 +314,8 @@ function App() {
       <footer>
         <p>공개 정책 정보를 모은 비공식 안내 서비스예요. 신청 전 공식 페이지에서 최신 조건을 확인해 주세요.</p>
         <div>
-          <button onClick={() => void openExternal(`${API_BASE}/terms`)}>이용약관</button>
-          <button onClick={() => void openExternal(`${API_BASE}/privacy`)}>개인정보처리방침</button>
+          <button onClick={() => setLegal("terms")}>이용약관</button>
+          <button onClick={() => setLegal("privacy")}>개인정보처리방침</button>
         </div>
       </footer>
 
@@ -256,11 +329,42 @@ function App() {
             <DetailBlock title="지원 내용" text={selected.benefit || selected.summary} />
             <DetailBlock title="신청 대상" text={selected.eligibility} />
             <DetailBlock title="신청 방법" text={selected.howTo} />
-            <button className="apply-button" onClick={() => void openExternal(selected.url)}>공식 페이지에서 확인</button>
+            <p className="external-note">공공기관의 공식 페이지가 외부 브라우저에서 열려요.</p>
+            <button className="apply-button" onClick={() => void openExternal(selected.url)}>공식 기관 페이지 열기</button>
           </section>
         </div>
       )}
+      {legal && <LegalSheet kind={legal} onClose={() => setLegal(null)} />}
     </main>
+  );
+}
+
+function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () => void }) {
+  const privacy = kind === "privacy";
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section className="detail-sheet legal-sheet" role="dialog" aria-modal="true" aria-label={privacy ? "개인정보처리방침" : "이용약관"} onClick={(event) => event.stopPropagation()}>
+        <div className="sheet-handle" />
+        <button className="close-button" aria-label="닫기" onClick={onClose}>×</button>
+        <h2>{privacy ? "개인정보처리방침" : "이용약관"}</h2>
+        {privacy ? (
+          <>
+            <DetailBlock title="기기에 저장되는 정보" text="저장한 혜택 목록은 앱인토스 기기 저장소에만 보관돼요. 운영자는 이 값을 확인할 수 없으며, 미니앱 데이터를 삭제하면 함께 지워져요." />
+            <DetailBlock title="서버에서 처리되는 정보" text="정책 조회 과정에서 접속 시각, IP 주소, 브라우저 정보 같은 접속 기록이 보안과 장애 대응 목적으로 처리될 수 있어요. 현재 AIT 앱은 회원가입이나 토스 로그인을 사용하지 않아요." />
+            <DetailBlock title="외부 서비스" text="정책 데이터 제공과 호스팅을 위해 Vercel 서버와 통신해요. 공식 신청 버튼을 누른 경우 선택한 공공기관 페이지로 이동해요." />
+            <DetailBlock title="문의" text="개인정보 관련 문의: fogtemplar@gmail.com" />
+          </>
+        ) : (
+          <>
+            <DetailBlock title="서비스 성격" text="복지모아는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
+            <DetailBlock title="정보 확인" text="공공기관의 변경 사항이 반영되기까지 시차가 있을 수 있어요. 신청 조건, 금액, 마감일은 반드시 공식 기관 페이지에서 최종 확인해 주세요." />
+            <DetailBlock title="외부 페이지" text="공식 기관 페이지를 열면 해당 기관의 이용약관과 개인정보처리방침이 적용돼요." />
+            <DetailBlock title="문의" text="서비스 문의: fogtemplar@gmail.com" />
+          </>
+        )}
+        <button className="more-button" onClick={() => void openExternal(`${API_BASE}/${privacy ? "privacy" : "terms"}`)}>전체 내용 보기</button>
+      </section>
+    </div>
   );
 }
 

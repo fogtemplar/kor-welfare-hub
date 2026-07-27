@@ -11,19 +11,26 @@ import type { NextRequest } from "next/server";
 //  - 읽기 전용 데이터 API: 오리진 허용 목록 기반 (미설정 시 * 유지)
 //  - /api/ai/*          : 허용 목록에 있는 오리진만. 목록 밖이면 CORS 헤더 없음
 //                         → 브라우저가 cross-origin 호출을 차단한다.
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+const BUILT_IN_ORIGINS = [
+  "https://kor-welfare-hub.apps.tossmini.com",
+  "https://kor-welfare-hub.private-apps.tossmini.com",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
 
-function resolveOrigin(req: NextRequest, isAi: boolean): string | null {
+const ALLOWED_ORIGINS = Array.from(
+  new Set([
+    ...BUILT_IN_ORIGINS,
+    ...(process.env.ALLOWED_ORIGINS ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ]),
+);
+
+function resolveOrigin(req: NextRequest): string | null {
   const origin = req.headers.get("origin");
 
-  if (ALLOWED_ORIGINS.length === 0) {
-    // 허용 목록 미설정: 기존 동작 유지(공개 데이터 API만).
-    // AI 라우트는 안전하게 동일 출처만 허용한다.
-    return isAi ? null : "*";
-  }
   if (!origin) return null; // same-origin 요청은 CORS 헤더가 필요 없다
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
   return null;
@@ -40,8 +47,7 @@ function corsHeaders(allowOrigin: string): Record<string, string> {
 }
 
 export function middleware(req: NextRequest) {
-  const isAi = req.nextUrl.pathname.startsWith("/api/ai");
-  const allowOrigin = resolveOrigin(req, isAi);
+  const allowOrigin = resolveOrigin(req);
 
   // 프리플라이트
   if (req.method === "OPTIONS") {

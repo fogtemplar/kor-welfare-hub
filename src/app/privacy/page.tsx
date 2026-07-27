@@ -6,14 +6,14 @@ export const metadata: Metadata = {
   description: "kor-welfare-hub 개인정보 처리방침",
 };
 
-const EFFECTIVE = "2026년 8월 1일";
+const EFFECTIVE = "2026년 7월 27일";
 
 export default function PrivacyPage() {
   return (
     <LegalPage title="개인정보 처리방침" effectiveDate={EFFECTIVE}>
       <Note>
         <strong>이 서비스는 건강·장애·임신 등 민감정보를 서버에 저장하지
-        않습니다.</strong> 해당 정보는 회원의 기기 안에만 보관되며, 맞춤 추천
+        않습니다.</strong> 해당 정보는 이용자의 기기 안에만 보관되며, 맞춤 추천
         계산도 기기에서 이뤄집니다.
       </Note>
 
@@ -25,41 +25,38 @@ export default function PrivacyPage() {
 
         <div className="rounded-xl border border-line overflow-hidden mt-4">
           <div className="bg-bg-subtle px-4 py-2.5 text-13 font-bold text-ink">
-            회원의 기기에만 저장 (서버 전송 없음)
+            이용자의 기기에만 저장 (서버 전송 없음)
           </div>
           <div className="px-4 py-3 text-14">
             소득 수준, 가구 형태, 주거 형태, 자녀 나이, 임신 여부, 장애 여부,
             취업 상태, 저장한 정책 목록
             <p className="mt-2 text-13 text-ink-tertiary">
-              브라우저 저장소(localStorage)에 보관됩니다. 서비스 운영자는 이
-              값을 볼 수 없습니다. 브라우저 데이터를 삭제하면 함께 지워집니다.
+              웹에서는 브라우저 저장소(localStorage), 앱인토스에서는 네이티브
+              Storage에 보관됩니다. 운영자는 이 값을 볼 수 없으며, 해당 서비스의
+              저장 데이터를 삭제하면 함께 지워집니다.
             </p>
           </div>
         </div>
 
         <div className="rounded-xl border border-line overflow-hidden mt-3">
           <div className="bg-bg-subtle px-4 py-2.5 text-13 font-bold text-ink">
-            서버에 저장 (토스 로그인을 선택한 경우에만)
+            서버에서 자동 처리
           </div>
           <div className="px-4 py-3 text-14">
-            회원 식별자, 생년월일, 성별, 거주 시·도, 알림을 신청한 정책 번호
+            접속 시각, IP 주소, 브라우저·기기 정보, 요청 주소
             <p className="mt-2 text-13 text-ink-tertiary">
-              마감 알림 발송에 필요한 최소 항목입니다. 상세 주소는 저장하지
-              않으며, 시·도 단위까지만 보관합니다.
+              서비스 보안, 장애 대응과 부정 이용 방지를 위한 접속 기록입니다.
+              현재 서비스는 회원가입이나 토스 로그인을 사용하지 않습니다.
             </p>
           </div>
         </div>
       </Section>
 
-      <Section heading="2. 토스 로그인을 쓰지 않아도 됩니다">
+      <Section heading="2. 회원가입 없이 이용할 수 있습니다">
         <p>
-          서비스는 <strong>토스 로그인 없이도 모든 정책 조회와 맞춤 추천을
-          이용</strong>할 수 있습니다. 이 경우 서버에 저장되는 개인정보가
-          없습니다.
-        </p>
-        <p>
-          토스 로그인은 나이·지역을 자동으로 채워 입력을 줄이고, 마감 알림을
-          받기 위한 선택 기능입니다.
+          서비스는 별도의 회원가입이나 토스 로그인 없이 정책 조회와 저장 기능을
+          이용할 수 있습니다. 토스 로그인 기능을 도입하는 경우 수집 항목과 목적을
+          사전에 고지하고 필요한 동의를 받겠습니다.
         </p>
       </Section>
 
@@ -74,31 +71,6 @@ export default function PrivacyPage() {
               </tr>
             </thead>
             <tbody className="text-ink-secondary">
-              <tr className="border-b border-line">
-                <td className="py-2.5 pr-3">회원 식별자(CI)</td>
-                <td className="py-2.5 pr-3">동일 회원 식별</td>
-                <td className="py-2.5">연동 해지 시까지</td>
-              </tr>
-              <tr className="border-b border-line">
-                <td className="py-2.5 pr-3">생년월일</td>
-                <td className="py-2.5 pr-3">연령 조건 매칭</td>
-                <td className="py-2.5">연동 해지 시까지</td>
-              </tr>
-              <tr className="border-b border-line">
-                <td className="py-2.5 pr-3">성별</td>
-                <td className="py-2.5 pr-3">성별 대상 정책 매칭</td>
-                <td className="py-2.5">연동 해지 시까지</td>
-              </tr>
-              <tr className="border-b border-line">
-                <td className="py-2.5 pr-3">주소(시·도)</td>
-                <td className="py-2.5 pr-3">지역 정책 매칭</td>
-                <td className="py-2.5">연동 해지 시까지</td>
-              </tr>
-              <tr className="border-b border-line">
-                <td className="py-2.5 pr-3">알림 신청 정책 번호</td>
-                <td className="py-2.5 pr-3">마감 알림 발송</td>
-                <td className="py-2.5">알림 해제 또는 마감 후 30일</td>
-              </tr>
               <tr>
                 <td className="py-2.5 pr-3">접속 로그</td>
                 <td className="py-2.5 pr-3">장애 대응·부정이용 방지</td>
@@ -137,11 +109,6 @@ export default function PrivacyPage() {
             </thead>
             <tbody className="text-ink-secondary">
               <tr className="border-b border-line">
-                <td className="py-2.5 pr-3">비바리퍼블리카(토스)</td>
-                <td className="py-2.5 pr-3">로그인 인증, 알림 발송</td>
-                <td className="py-2.5">회원 식별자</td>
-              </tr>
-              <tr className="border-b border-line">
                 <td className="py-2.5 pr-3">Vercel Inc.</td>
                 <td className="py-2.5 pr-3">서비스 호스팅</td>
                 <td className="py-2.5">접속 로그</td>
@@ -155,29 +122,26 @@ export default function PrivacyPage() {
           </table>
         </div>
         <p className="text-13 text-ink-tertiary mt-3">
-          Vercel과 Google은 국외(미국 등)에서 정보를 처리합니다. 회원은 국외 이전을
+          Vercel과 Google은 국외(미국 등)에서 정보를 처리합니다. 이용자는 국외 이전을
           거부할 수 있으며, 이 경우 AI 추천 기능 이용이 제한될 수 있습니다.
         </p>
       </Section>
 
       <Section heading="6. 회원의 권리">
-        <p>회원은 언제든지 다음을 할 수 있습니다.</p>
+        <p>이용자는 언제든지 다음을 할 수 있습니다.</p>
         <Bullets
           items={[
             <><strong>기기 저장 정보 삭제</strong> — 서비스 내 &lsquo;내 정보 초기화&rsquo; 또는 브라우저 데이터 삭제</>,
-            <><strong>서버 저장 정보 삭제</strong> — 토스 앱에서 연동을 해지하면 서버 데이터가 자동으로 삭제됩니다</>,
             <><strong>열람·정정 요청</strong> — 아래 문의처로 요청하시면 지체 없이 처리합니다</>,
-            <><strong>알림 해제</strong> — 정책별 알림을 개별 해제할 수 있습니다</>,
           ]}
         />
       </Section>
 
-      <Section heading="7. 연동 해지 시 처리">
+      <Section heading="7. 저장 정보 삭제">
         <p>
-          회원이 토스에서 연동을 끊으면 서비스는 토스로부터 해지 통보를 받고,
-          해당 회원의 서버 저장 정보를 <strong>지체 없이 파기</strong>합니다.
-          기기에 저장된 정보는 회원이 직접 삭제하거나 브라우저 데이터를 지우면
-          제거됩니다.
+          웹에서는 브라우저 데이터를 삭제하고, 앱인토스에서는 미니앱의 저장
+          데이터를 삭제하면 기기에 저장된 정보가 제거됩니다. 운영자가 보유한
+          접속 기록에 대한 문의나 삭제 요청은 아래 문의처로 접수할 수 있습니다.
         </p>
       </Section>
 

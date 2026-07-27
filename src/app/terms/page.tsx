@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "kor-welfare-hub 이용약관",
 };
 
-const EFFECTIVE = "2026년 8월 1일";
+const EFFECTIVE = "2026년 7월 27일";
 
 export default function TermsPage() {
   return (
@@ -36,7 +36,15 @@ export default function TermsPage() {
         />
       </Section>
 
-      <Section heading="제3조 (정보의 정확성과 시점)">
+      <Section heading="제3조 (제공 환경)">
+        <p>
+          서비스는 일반 웹과 토스 앱 안의 미니앱(앱인토스)에서 제공될 수
+          있습니다. 앱인토스 버전은 회원가입 없이 정책 검색·저장·상세 확인
+          기능을 제공하며, 저장한 정책은 이용자의 기기 저장소에 보관됩니다.
+        </p>
+      </Section>
+
+      <Section heading="제4조 (정보의 정확성과 시점)">
         <p>
           서비스는 원본 데이터를 주기적으로 갱신하지만, 공공기관의 정보 변경
           시점과 서비스 반영 시점 사이에 시차가 있을 수 있습니다. 또한 원본
@@ -49,7 +57,7 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section heading="제4조 (AI 기능)">
+      <Section heading="제5조 (AI 기능)">
         <p>
           서비스는 정책 정보를 이해하기 쉽게 풀어쓰거나 관련 정책을 찾아주기 위해
           인공지능을 사용합니다. 이때 다음을 지킵니다.
@@ -63,7 +71,7 @@ export default function TermsPage() {
         />
       </Section>
 
-      <Section heading="제5조 (회원의 의무)">
+      <Section heading="제6조 (이용자의 의무)">
         <p>회원은 다음 행위를 해서는 안 됩니다.</p>
         <Bullets
           items={[
@@ -75,7 +83,7 @@ export default function TermsPage() {
         />
       </Section>
 
-      <Section heading="제6조 (서비스의 변경·중단)">
+      <Section heading="제7조 (서비스의 변경·중단)">
         <p>
           서비스는 운영상·기술상 필요에 따라 제공 내용을 변경하거나 중단할 수
           있습니다. 무료로 제공되는 서비스의 변경·중단으로 인해 회원에게 발생한
@@ -84,7 +92,7 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section heading="제7조 (책임의 제한)">
+      <Section heading="제8조 (책임의 제한)">
         <p>
           서비스는 공공 데이터를 정리해 전달하는 매개자입니다. 회원이 서비스의
           정보를 근거로 한 신청·미신청·기한 도과 등으로 발생한 결과에 대해
@@ -93,7 +101,7 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section heading="제8조 (약관의 변경)">
+      <Section heading="제9조 (약관의 변경)">
         <p>
           서비스는 필요한 경우 이 약관을 변경할 수 있으며, 변경된 약관은 서비스
           내에 공지합니다. 회원에게 불리한 변경의 경우 시행일 30일 전부터
@@ -101,7 +109,7 @@ export default function TermsPage() {
         </p>
       </Section>
 
-      <Section heading="제9조 (문의)">
+      <Section heading="제10조 (문의)">
         <p>
           서비스 이용과 관련한 문의는 아래로 연락해 주세요.
           <br />
