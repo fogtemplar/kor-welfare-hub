@@ -925,7 +925,16 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
   const questionStep = step - 2;
   const toggleArray = (field: "statuses" | "supportNeeds" | "interests", value: string) => setProfile((current) => ({ ...current, [field]: current[field].includes(value) ? current[field].filter((item) => item !== value) : [...current[field], value] }));
   const canContinue = step === 0 ? Boolean(tossProfile) : step === 1 ? Boolean(consentedData) : questionStep === 0 ? Boolean(profile.household) : questionStep === 1 ? Boolean(profile.housing) : questionStep === 2 ? profile.statuses.length > 0 : questionStep === 3 ? Boolean(profile.incomePct) : questionStep === 6 ? profile.interests.length > 0 : true;
-  const next = () => step === steps.length - 1 ? onDone() : onStep(step + 1);
+  const next = () => {
+    if (step === steps.length - 1) {
+      // TODO(AIT 전면형 광고): 광고 그룹 승인이 끝나면 마지막 단계에서
+      // `광고 보고 결과 확인` → 전면형 광고 종료 콜백 → onDone() 순서로 연결한다.
+      // 광고 로드 실패·사용자 닫기 시에도 결과 확인을 막지 않도록 onDone() 폴백을 유지한다.
+      onDone();
+      return;
+    }
+    onStep(step + 1);
+  };
 
   return <div className="first-onboarding" role="dialog" aria-modal="true" aria-label="맞춤 혜택 설정">
     <div className="onboarding-top"><button disabled={step === 0} onClick={() => onStep(step - 1)} aria-label="이전">‹</button><div><span>{step + 1}</span> / {steps.length}</div><button onClick={onSkip}>건너뛰기</button></div>
@@ -944,6 +953,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
       {questionStep === 6 && <OnboardingChoices options={INTERESTS} values={profile.interests} onSelect={(value) => toggleArray("interests", value)} multiple />}
     </section>
     <div className="onboarding-bottom">
+      {/* 1~9단계 모두 동일한 승인 배너 광고 그룹을 하단에 노출한다. */}
       <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd /></Suspense>
       <button className="onboarding-next" disabled={!canContinue} onClick={next}>{step === steps.length - 1 ? "맞춤 혜택 보기" : "다음"}</button>
     </div>
