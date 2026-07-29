@@ -120,11 +120,6 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .source-panel { display: grid; gap: 4px; margin-top: 8px; padding: 14px 15px; border-radius: 14px; background: #f7f8fa; }
 .source-panel span, .source-panel small { color: #8b95a1; font-size: 11px; }
 .source-panel strong { color: #333d4b; font-size: 13px; }
-.application-checklist { margin: 8px 0 16px; padding: 16px; border-radius: 16px; background: #f7f8fa; }
-.application-checklist h3 { margin: 0 0 4px; color: #333d4b; font-size: 14px; }
-.application-checklist > p { margin: 0 0 10px; color: #8b95a1; font-size: 10px; }
-.application-checklist label { display: flex; align-items: center; gap: 9px; min-height: 39px; color: #4e5968; font-size: 12px; }
-.application-checklist input { width: 18px; height: 18px; accent-color: #3182f6; }
 .tds-cta { margin-top: 10px; }
 .tds-primary-button { width: 100%; min-height: 54px; border: 0; border-radius: 16px; background: #3182f6; color: #fff; font-size: 15px; font-weight: 700; letter-spacing: -.2px; transition: transform .12s ease, opacity .12s ease; }
 .tds-primary-button:active { transform: scale(.985); opacity: .9; }

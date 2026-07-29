@@ -9,7 +9,6 @@ const API_BASE = "https://kor-welfare-hub.vercel.app";
 const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
-const CHECKLIST_KEY = "kor-welfare-hub:ait:checklists:v1";
 const REPORT_KEY = "kor-welfare-hub:ait:last-report:v1";
 const PENDING_REPORT_KEY = "kor-welfare-hub:ait:pending-report:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
@@ -195,7 +194,6 @@ function App() {
   const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
   const [storedReport, setStoredReport] = useState<StoredReport | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState("");
-  const [checklists, setChecklists] = useState<Record<string, boolean[]>>({});
 
   const track = (name: string, params: Record<string, string | number | boolean | null> = {}) => {
     void eventLog({ log_name: name, log_type: "event", params }).catch(() => undefined);
@@ -215,10 +213,8 @@ function App() {
     try {
       const rawReport = localStorage.getItem(REPORT_KEY);
       const rawPending = localStorage.getItem(PENDING_REPORT_KEY);
-      const rawChecklists = localStorage.getItem(CHECKLIST_KEY);
       if (rawReport) setStoredReport(JSON.parse(rawReport) as StoredReport);
       if (rawPending) setPendingOrderId(rawPending);
-      if (rawChecklists) setChecklists(JSON.parse(rawChecklists) as Record<string, boolean[]>);
     } catch {
       // 손상된 로컬 데이터는 무시하고 새로 시작해요.
     }
@@ -400,23 +396,6 @@ function App() {
       else next.add(id);
       void persistSaved(next);
       track(next.has(id) ? "welfare_save" : "welfare_unsave", { policy_id: id });
-      return next;
-    });
-  };
-
-  const checklistItems = (policy: Policy) => [
-    "지원 대상과 소득 기준 확인",
-    policy.howTo ? "신청 방법과 접수처 확인" : "공식 기관에서 신청 방법 확인",
-    "필요 서류 준비",
-    "신청 완료",
-  ];
-
-  const toggleChecklist = (policyId: string, index: number) => {
-    setChecklists((current) => {
-      const next = { ...current, [policyId]: [...(current[policyId] || [false, false, false, false])] };
-      next[policyId][index] = !next[policyId][index];
-      localStorage.setItem(CHECKLIST_KEY, JSON.stringify(next));
-      track("welfare_checklist_toggle", { policy_id: policyId, step: index + 1, checked: next[policyId][index] });
       return next;
     });
   };
@@ -762,11 +741,6 @@ function App() {
             <DetailBlock title="지원 내용" text={policyBenefit(selected)} />
             <DetailBlock title="신청 대상" text={policyAudience(selected)} />
             <DetailBlock title="신청 방법" text={selected.howTo} />
-            <div className="application-checklist">
-              <h3>신청 체크리스트</h3>
-              <p>확인한 항목은 이 기기에 저장돼요.</p>
-              {checklistItems(selected).map((item, index) => <label key={item}><input type="checkbox" checked={Boolean(checklists[selected.id]?.[index])} onChange={() => toggleChecklist(selected.id, index)} /><span>{item}</span></label>)}
-            </div>
             <div className="source-panel">
               <span>정보 출처</span>
               <strong>{SOURCE_LABELS[selected.source || ""] || selected.agency}</strong>
