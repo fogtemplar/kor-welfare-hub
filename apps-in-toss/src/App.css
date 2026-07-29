@@ -16,7 +16,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .onboarding-content h1 { margin: 10px 0 8px; color: #191f28; font-size: 27px; line-height: 1.3; letter-spacing: -.8px; }
 .onboarding-content > p { margin: 0 0 25px; color: #8b95a1; font-size: 13px; line-height: 1.55; }
 .onboarding-brand-intro { display: grid; justify-items: center; margin: -4px 0 22px; text-align: center; }
-.onboarding-brand-intro img { width: 72px; height: 72px; border-radius: 22px; box-shadow: 0 10px 26px rgba(0,39,100,.17); }
+.onboarding-brand-intro img { width: 96px; height: 96px; border-radius: 28px; box-shadow: 0 12px 30px rgba(0,39,100,.2); }
 .onboarding-brand-intro > strong { margin-top: 10px; color: #333d4b; font-size: 13px; letter-spacing: -.2px; }
 .onboarding-brand-intro h1 { margin: 15px 0 9px; font-size: 28px; line-height: 1.28; letter-spacing: -1px; }
 .onboarding-brand-intro h1 em { color: #3182f6; font-style: normal; }
@@ -28,6 +28,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .onboarding-auth-card > button { width: 100%; min-height: 52px; border: 0; border-radius: 14px; background: #3182f6; color: #fff; font-size: 14px; font-weight: 800; }
 .onboarding-auth-card > button:disabled { background: #d1d6db; cursor: default; }
 .onboarding-auth-card > small { margin-top: 11px; color: #8b95a1; font-size: 9px; line-height: 1.5; }
+.onboarding-auth-card.login-only { padding: 16px 18px; }
 .onboarding-data-list { display: grid; gap: 1px; width: 100%; margin-bottom: 18px; overflow: hidden; border-radius: 14px; background: #e5e8eb; text-align: left; }
 .onboarding-data-list span { display: grid; gap: 3px; padding: 13px 14px; background: #fff; }
 .onboarding-data-list b { color: #333d4b; font-size: 12px; }
