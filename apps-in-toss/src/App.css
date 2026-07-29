@@ -18,8 +18,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .onboarding-brand-intro { display: grid; justify-items: center; margin: 0 0 20px; text-align: center; }
 .onboarding-brand-intro img { width: 100px; height: 100px; border-radius: 29px; box-shadow: 0 13px 32px rgba(0,39,100,.2); }
 .onboarding-brand-intro > strong { margin-top: 9px; color: #333d4b; font-size: 13px; letter-spacing: -.2px; }
-.onboarding-benefit-count { margin-top: 14px; padding: 7px 11px; border-radius: 999px; background: #eaf3ff; color: #1b64da; font-size: 11px; font-weight: 800; }
-.onboarding-brand-intro h1 { margin: 12px 0 9px; font-size: 29px; line-height: 1.27; letter-spacing: -1.05px; }
+.onboarding-brand-intro h1 { margin: 18px 0 9px; font-size: 29px; line-height: 1.3; letter-spacing: -1.05px; }
 .onboarding-brand-intro h1 em { color: #3182f6; font-style: normal; }
 .onboarding-brand-intro p { margin: 0; color: #6b7684; font-size: 13px; line-height: 1.55; }
 .onboarding-auth-card { display: grid; justify-items: center; padding: 24px 18px; border: 1px solid #e5e8eb; border-radius: 20px; background: linear-gradient(155deg,#f8fbff,#fff); text-align: center; box-shadow: 0 8px 24px rgba(49,130,246,.07); }
