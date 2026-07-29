@@ -160,15 +160,37 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-price-summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 17px 0 10px; padding: 13px 14px; border-radius: 13px; background: #f7f8fa; }
 .report-price-summary span { color: #8b95a1; font-size: 11px; }
 .report-price-summary strong { color: #f04452; font-size: 14px; }
-.report-result > h3 { margin: 0 0 7px; font-size: 19px; }
 .report-saved-at { margin-bottom: 10px; color: #8b95a1; font-size: 10px; }
-.report-result > p { color: #6b7684; font-size: 13px; line-height: 1.6; }
-.report-result > button { display: grid; gap: 5px; width: 100%; margin: 9px 0; padding: 15px; border: 0; border-radius: 15px; background: #f7f8fa; text-align: left; }
-.report-result > button b { color: #191f28; font-size: 14px; }
-.report-result > button span { color: #4e5968; font-size: 12px; line-height: 1.5; }
-.report-result > button small { color: #3182f6; font-size: 10px; }
-.report-result h4 { margin-bottom: 7px; }
-.report-result ol { margin-top: 0; padding-left: 21px; color: #4e5968; font-size: 12px; line-height: 1.7; }
+.report-document-head { margin: 0 -2px 18px; padding: 20px; border-radius: 18px; background: linear-gradient(145deg,#172b4d,#1b64da); color: #fff; }
+.report-document-head > span { font-size: 10px; font-weight: 750; opacity: .7; }
+.report-document-head h3 { margin: 12px 0 7px; font-size: 21px; line-height: 1.35; }
+.report-document-head p { margin: 0; color: rgba(255,255,255,.75); font-size: 11px; }
+.report-section { margin: 12px 0; padding: 16px; border: 1px solid #e8ebed; border-radius: 15px; background: #fff; }
+.report-section.warning { border-color: #ffe0a3; background: #fff9eb; }
+.report-section > h4,.report-policy-heading { margin: 0 0 10px; color: #191f28; font-size: 14px; }
+.report-section p,.report-section li { color: #4e5968; font-size: 12px; line-height: 1.65; }
+.report-section p { margin: 0; }
+.report-section ul,.report-section ol { margin: 0; padding-left: 19px; }
+.report-profile-table { display: grid; gap: 1px; overflow: hidden; border-radius: 10px; background: #e5e8eb; }
+.report-profile-table > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 11px; background: #f7f8fa; }
+.report-profile-table b { color: #333d4b; font-size: 11px; }
+.report-profile-table span { color: #6b7684; font-size: 11px; line-height: 1.5; }
+.report-policy-heading { margin: 24px 0 11px; font-size: 16px; }
+.report-policy { margin: 12px 0; padding: 18px 16px; border: 1px solid #dfe7f2; border-radius: 18px; background: #fff; box-shadow: 0 6px 18px rgba(0,27,55,.05); }
+.report-policy-top { display: flex; align-items: center; justify-content: space-between; }
+.report-policy-top > span { color: #3182f6; font-size: 10px; font-weight: 800; }
+.report-policy-top em { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-style: normal; font-weight: 750; }
+.fit-high { background: #e8faf3; color: #008c64; }.fit-check { background: #fff3db; color: #b25c00; }.fit-low { background: #f2f4f6; color: #8b95a1; }
+.report-policy > h4 { margin: 11px 0 3px; color: #191f28; font-size: 17px; }
+.report-policy > small { color: #8b95a1; font-size: 10px; }
+.report-fit-reason { margin: 13px 0; color: #4e5968; font-size: 12px; line-height: 1.6; }
+.report-mini { margin-top: 10px; padding: 12px; border-radius: 11px; background: #f7f8fa; }
+.report-mini.warning { background: #fff5f6; }
+.report-mini > b { display: block; margin-bottom: 6px; color: #333d4b; font-size: 11px; }
+.report-mini p,.report-mini li { margin: 0; color: #6b7684; font-size: 11px; line-height: 1.6; }
+.report-mini ul,.report-mini ol { margin: 0; padding-left: 18px; }
+.report-policy > button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; margin-top: 13px; padding: 0 13px; border: 0; border-radius: 12px; background: #eaf3ff; color: #1b64da; font-size: 12px; font-weight: 750; }
+.report-policy > button b { font-size: 18px; }
 .report-nudge-backdrop { z-index: 120; }
 .report-nudge-sheet { text-align: center; }
 .nudge-badge { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: #eaf3ff; color: #1b64da; font-size: 11px; font-weight: 750; }

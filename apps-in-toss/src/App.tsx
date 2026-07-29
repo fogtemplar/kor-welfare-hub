@@ -1,5 +1,5 @@
 import { appLogin, eventLog, getConsentedUserData, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import "./App.css";
 
 const TdsExternalDialog = lazy(() => import("./TdsExternalDialog"));
@@ -9,17 +9,24 @@ const API_BASE = "https://kor-welfare-hub.vercel.app";
 const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
-const REPORT_KEY = "kor-welfare-hub:ait:last-report:v1";
+const REPORT_KEY = "kor-welfare-hub:ait:last-report:v2";
 const PENDING_REPORT_KEY = "kor-welfare-hub:ait:pending-report:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
 const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
 
 type WelfareReport = {
   title: string;
-  summary: string;
+  generatedFor: string;
+  executiveSummary: string;
+  profileAnalysis: Array<{ label: string; assessment: string }>;
+  priorityStrategy: string;
   actionPlan: string[];
-  cautions: string[];
-  recommendations: Array<{ policyId: string; title: string; agency: string; reason: string; nextStep: string; url: string }>;
+  generalCautions: string[];
+  recommendations: Array<{
+    policyId: string; title: string; agency: string; fit: "높음" | "추가 확인" | "낮음"; fitReason: string;
+    benefitEstimate: string; eligibilityChecks: string[]; requiredDocuments: string[]; applicationSteps: string[];
+    deadline: string; risks: string[]; url: string;
+  }>;
 };
 
 type StoredReport = { orderId: string; createdAt: string; report: WelfareReport };
@@ -794,9 +801,25 @@ function App() {
             {report ? (
               <div className="report-result">
                 {storedReport && <div className="report-saved-at">최근 리포트 · {new Date(storedReport.createdAt).toLocaleDateString("ko-KR")}</div>}
-                <h3>{report.title}</h3><p>{report.summary}</p>
-                {report.recommendations.map((item, index) => <button key={`${item.policyId}-${index}`} onClick={() => setExternalTarget(item.url)}><b>{index + 1}. {item.title}</b><span>{item.reason}</span><small>{item.agency} · {item.nextStep}</small></button>)}
-                <h4>지금 할 일</h4><ol>{report.actionPlan.map((item) => <li key={item}>{item}</li>)}</ol>
+                <div className="report-document-head"><span>나라가쏜다 복지분석 보고서</span><h3>{report.title}</h3><p>{report.generatedFor}</p></div>
+                <ReportSection title="종합 진단"><p>{report.executiveSummary}</p></ReportSection>
+                <ReportSection title="조건 분석"><div className="report-profile-table">{report.profileAnalysis.map((item) => <div key={item.label}><b>{item.label}</b><span>{item.assessment}</span></div>)}</div></ReportSection>
+                <ReportSection title="추천 전략"><p>{report.priorityStrategy}</p></ReportSection>
+                <h4 className="report-policy-heading">우선 확인할 복지제도 {report.recommendations.length}건</h4>
+                {report.recommendations.map((item, index) => <article className="report-policy" key={`${item.policyId}-${index}`}>
+                  <div className="report-policy-top"><span>{index + 1}순위</span><em className={`fit-${item.fit === "높음" ? "high" : item.fit === "낮음" ? "low" : "check"}`}>{item.fit}</em></div>
+                  <h4>{item.title}</h4><small>{item.agency}</small>
+                  <p className="report-fit-reason">{item.fitReason}</p>
+                  <ReportMini title="예상 혜택" text={item.benefitEstimate} />
+                  <ReportList title="자격 확인사항" items={item.eligibilityChecks} />
+                  <ReportList title="준비서류" items={item.requiredDocuments} />
+                  <ReportList title="신청 절차" items={item.applicationSteps} ordered />
+                  <ReportMini title="신청기한" text={item.deadline} />
+                  <ReportList title="주의사항" items={item.risks} warning />
+                  <button onClick={() => setExternalTarget(item.url)}>공식 기관에서 확인하기 <b>›</b></button>
+                </article>)}
+                <ReportSection title="권장 실행 순서"><ol>{report.actionPlan.map((item) => <li key={item}>{item}</li>)}</ol></ReportSection>
+                <ReportSection title="공통 유의사항" warning><ul>{report.generalCautions.map((item) => <li key={item}>{item}</li>)}</ul></ReportSection>
                 <p className="report-disclaimer">AI가 공개 정보를 바탕으로 만든 참고 자료예요. 실제 자격과 신청 조건은 기관에서 최종 확인해 주세요.</p>
               </div>
             ) : (
@@ -844,6 +867,19 @@ function DeadlineBadge({ policy }: { policy: Policy }) {
   if (days < 0) return <span className="deadline-badge closed">마감 확인</span>;
   if (days <= 30) return <span className="deadline-badge urgent">D-{days}</span>;
   return <span className="deadline-badge">~ {deadline.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>;
+}
+
+function ReportSection({ title, children, warning = false }: { title: string; children: ReactNode; warning?: boolean }) {
+  return <section className={warning ? "report-section warning" : "report-section"}><h4>{title}</h4>{children}</section>;
+}
+
+function ReportMini({ title, text }: { title: string; text: string }) {
+  return <div className="report-mini"><b>{title}</b><p>{text}</p></div>;
+}
+
+function ReportList({ title, items, ordered = false, warning = false }: { title: string; items: string[]; ordered?: boolean; warning?: boolean }) {
+  const children = items.map((item) => <li key={item}>{item}</li>);
+  return <div className={warning ? "report-mini warning" : "report-mini"}><b>{title}</b>{ordered ? <ol>{children}</ol> : <ul>{children}</ul>}</div>;
 }
 
 function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () => void }) {

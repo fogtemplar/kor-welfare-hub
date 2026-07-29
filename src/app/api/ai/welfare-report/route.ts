@@ -60,14 +60,14 @@ export async function POST(request: Request) {
     const policies = [...CURATED_POLICIES, ...(await fetchExternalPolicies())]
       .sort((a, b) => scorePolicy(b, body) - scorePolicy(a, body))
       .slice(0, 35)
-      .map((policy) => ({ id: policy.id, title: policy.title, agency: policy.agency, region: policy.region, category: policy.category, summary: policy.summary, benefit: policy.benefit, eligibility: policy.eligibility, howTo: policy.howTo, url: policy.url, updatedAt: policy.updatedAt }));
+      .map((policy) => ({ id: policy.id, title: policy.title, agency: policy.agency, region: policy.region, category: policy.category, summary: policy.summary, benefit: policy.benefit, eligibility: policy.eligibility, howTo: policy.howTo, deadline: policy.deadline, isAlwaysOpen: policy.isAlwaysOpen, url: policy.url, updatedAt: policy.updatedAt }));
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-5.6",
-        instructions: "당신은 한국 복지 정책 안내 도우미입니다. 제공된 후보 정책만 추천하고 자격을 확정적으로 단정하지 마세요. 사용자가 당장 확인할 순서와 준비할 내용을 간결한 한국어 해요체로 작성하세요. 입력에 포함된 개인정보를 답변에 불필요하게 반복하지 마세요.",
+        instructions: "당신은 한국 복지제도 실무 경험이 풍부한 전문 상담사입니다. 유료 상담 보고서 수준의 구체적이고 정돈된 한국어 문서를 작성하세요. 제공된 후보 정책만 추천하고 존재하지 않는 금액·기한·서류를 만들어내지 마세요. 정보가 없으면 '공식 공고 확인 필요'라고 명시하세요. 자격은 확정하지 말고 일치·추가확인·불일치 가능성으로 평가하세요. 각 정책마다 판단 근거, 예상 혜택, 자격 확인 항목, 준비서류, 단계별 신청 절차, 기한, 중복수급·탈락 위험을 구분하세요. 입력된 개인정보는 불필요하게 반복하지 마세요. 문체는 전문적이되 이해하기 쉬운 해요체를 사용하세요.",
         input: JSON.stringify({ user: { details, age: body.filters?.age, region: body.filters?.region, category: body.filters?.category, gender: body.tossData?.gender, nationality: body.tossData?.nationality, ...body.profile }, candidatePolicies: policies }),
         text: {
           format: {
@@ -77,12 +77,24 @@ export async function POST(request: Request) {
             schema: {
               type: "object",
               additionalProperties: false,
-              required: ["title", "summary", "actionPlan", "cautions", "recommendations"],
+              required: ["title", "generatedFor", "executiveSummary", "profileAnalysis", "priorityStrategy", "actionPlan", "generalCautions", "recommendations"],
               properties: {
-                title: { type: "string" }, summary: { type: "string" },
-                actionPlan: { type: "array", minItems: 2, maxItems: 5, items: { type: "string" } },
-                cautions: { type: "array", maxItems: 4, items: { type: "string" } },
-                recommendations: { type: "array", minItems: 1, maxItems: 5, items: { type: "object", additionalProperties: false, required: ["policyId", "title", "agency", "reason", "nextStep", "url"], properties: { policyId: { type: "string" }, title: { type: "string" }, agency: { type: "string" }, reason: { type: "string" }, nextStep: { type: "string" }, url: { type: "string" } } } },
+                title: { type: "string" },
+                generatedFor: { type: "string" },
+                executiveSummary: { type: "string" },
+                profileAnalysis: { type: "array", minItems: 3, maxItems: 7, items: { type: "object", additionalProperties: false, required: ["label", "assessment"], properties: { label: { type: "string" }, assessment: { type: "string" } } } },
+                priorityStrategy: { type: "string" },
+                actionPlan: { type: "array", minItems: 3, maxItems: 7, items: { type: "string" } },
+                generalCautions: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } },
+                recommendations: { type: "array", minItems: 2, maxItems: 5, items: { type: "object", additionalProperties: false, required: ["policyId", "title", "agency", "fit", "fitReason", "benefitEstimate", "eligibilityChecks", "requiredDocuments", "applicationSteps", "deadline", "risks", "url"], properties: {
+                  policyId: { type: "string" }, title: { type: "string" }, agency: { type: "string" },
+                  fit: { type: "string", enum: ["높음", "추가 확인", "낮음"] },
+                  fitReason: { type: "string" }, benefitEstimate: { type: "string" }, deadline: { type: "string" }, url: { type: "string" },
+                  eligibilityChecks: { type: "array", minItems: 2, maxItems: 6, items: { type: "string" } },
+                  requiredDocuments: { type: "array", minItems: 1, maxItems: 7, items: { type: "string" } },
+                  applicationSteps: { type: "array", minItems: 2, maxItems: 6, items: { type: "string" } },
+                  risks: { type: "array", minItems: 1, maxItems: 5, items: { type: "string" } }
+                } } },
               },
             },
           },
