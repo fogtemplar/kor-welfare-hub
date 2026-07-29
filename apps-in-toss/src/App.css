@@ -165,6 +165,14 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-document-head > span { font-size: 10px; font-weight: 750; opacity: .7; }
 .report-document-head h3 { margin: 12px 0 7px; font-size: 21px; line-height: 1.35; }
 .report-document-head p { margin: 0; color: rgba(255,255,255,.75); font-size: 11px; }
+.report-quick-summary { margin: 12px 0; padding: 16px; border-radius: 15px; background: #eaf3ff; }
+.report-quick-summary > b { color: #1b64da; font-size: 12px; }
+.report-quick-summary p { margin: 8px 0; color: #333d4b; font-size: 12px; line-height: 1.65; }
+.report-quick-summary small { color: #6b7684; font-size: 10px; line-height: 1.55; }
+.report-profile-chips { display: flex; gap: 7px; margin: 10px 0 20px; padding-bottom: 3px; overflow-x: auto; scrollbar-width: none; }
+.report-profile-chips::-webkit-scrollbar { display: none; }
+.report-profile-chips span { flex: 0 0 145px; min-height: 72px; padding: 11px; border: 1px solid #e8ebed; border-radius: 13px; color: #6b7684; font-size: 10px; line-height: 1.45; }
+.report-profile-chips b { display: block; margin-bottom: 5px; color: #3182f6; font-size: 10px; }
 .report-section { margin: 12px 0; padding: 16px; border: 1px solid #e8ebed; border-radius: 15px; background: #fff; }
 .report-section.warning { border-color: #ffe0a3; background: #fff9eb; }
 .report-section > h4,.report-policy-heading { margin: 0 0 10px; color: #191f28; font-size: 14px; }
@@ -186,9 +194,11 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-fit-reason { margin: 13px 0; color: #4e5968; font-size: 12px; line-height: 1.6; }
 .report-mini { margin-top: 10px; padding: 12px; border-radius: 11px; background: #f7f8fa; }
 .report-mini.warning { background: #fff5f6; }
-.report-mini > b { display: block; margin-bottom: 6px; color: #333d4b; font-size: 11px; }
+.report-mini > b { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; color: #333d4b; font-size: 11px; }
+.report-mini > b i { display: inline-grid; place-items: center; width: 21px; height: 21px; border-radius: 7px; background: #eaf3ff; color: #1b64da; font-size: 10px; font-style: normal; }
 .report-mini p,.report-mini li { margin: 0; color: #6b7684; font-size: 11px; line-height: 1.6; }
 .report-mini ul,.report-mini ol { margin: 0; padding-left: 18px; }
+.report-card-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .report-policy > button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; margin-top: 13px; padding: 0 13px; border: 0; border-radius: 12px; background: #eaf3ff; color: #1b64da; font-size: 12px; font-weight: 750; }
 .report-policy > button b { font-size: 18px; }
 .report-nudge-backdrop { z-index: 120; }
