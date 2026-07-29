@@ -139,7 +139,7 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-field > span { font-size: 13px; font-weight: 700; }
 .report-field textarea { width: 100%; min-height: 130px; resize: vertical; padding: 14px; border: 1px solid #d1d6db; border-radius: 15px; outline: 0; color: #191f28; font: inherit; font-size: 14px; line-height: 1.55; }
 .report-field textarea:focus { border-color: #3182f6; box-shadow: 0 0 0 3px rgba(49,130,246,.1); }
-.report-field small { justify-self: end; color: #8b95a1; font-size: 10px; }
+.report-field small { justify-self: end; max-width: 390px; color: #8b95a1; font-size: 10px; line-height: 1.5; text-align: right; }
 .report-field > span small,.report-question strong small { margin-left: 4px; color: #8b95a1; font-size: 10px; font-weight: 500; }
 .report-question { display: grid; gap: 9px; margin: 17px 0; }
 .report-question > strong,.report-select > span { color: #333d4b; font-size: 13px; }
