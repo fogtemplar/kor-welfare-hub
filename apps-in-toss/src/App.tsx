@@ -1,14 +1,24 @@
-import { appLogin, getConsentedUserData, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
+import { appLogin, getConsentedUserData, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const TdsExternalDialog = lazy(() => import("./TdsExternalDialog"));
+const TossBannerAd = lazy(() => import("./TossBannerAd"));
 
 const API_BASE = "https://kor-welfare-hub.vercel.app";
 const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
+const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "welfare_report_990";
+
+type WelfareReport = {
+  title: string;
+  summary: string;
+  actionPlan: string[];
+  cautions: string[];
+  recommendations: Array<{ policyId: string; title: string; agency: string; reason: string; nextStep: string; url: string }>;
+};
 
 type TossProfile = {
   userKey: number;
@@ -127,6 +137,12 @@ function App() {
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [externalTarget, setExternalTarget] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [report, setReport] = useState<WelfareReport | null>(null);
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportConsent, setReportConsent] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/toss/session`, { credentials: "include" })
@@ -398,6 +414,79 @@ function App() {
     setAuthError("");
   };
 
+  const requestPaidReport = async () => {
+    if (!reportConsent || reportDetails.trim().length < 10) {
+      setReportError("현재 상황을 10자 이상 적고 정보 처리에 동의해 주세요.");
+      return;
+    }
+    setReportLoading(true);
+    setReportError("");
+    try {
+      const catalog = await IAP.getProductItemList();
+      const product = catalog?.products.find((item) => item.sku === REPORT_SKU);
+      if (!product) {
+        setReportError("토스 앱에서 결제 상품을 확인하지 못했어요. 최신 토스 앱에서 다시 시도해 주세요.");
+        setReportLoading(false);
+        return;
+      }
+      if (product.type !== "CONSUMABLE" || product.displayAmount.replace(/\D/g, "") !== "990") {
+        setReportError("상품 설정을 확인하고 있어요. 잠시 후 다시 이용해 주세요.");
+        setReportLoading(false);
+        return;
+      }
+    } catch {
+      setReportError("결제 상품 정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setReportLoading(false);
+      return;
+    }
+    let cleanup = () => undefined;
+    cleanup = IAP.createOneTimePurchaseOrder({
+      options: {
+        sku: REPORT_SKU,
+        processProductGrant: async ({ orderId }) => {
+          try {
+            const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId,
+                details: reportDetails.trim(),
+                filters: { age, region, category },
+                tossData: consentedData ? {
+                  gender: consentedData.USER_GENDER,
+                  nationality: consentedData.USER_NATIONALITY,
+                } : undefined,
+              }),
+            });
+            const data = await response.json() as WelfareReport & { error?: string };
+            if (!response.ok) throw new Error(data.error || "REPORT_FAILED");
+            setReport(data);
+            return true;
+          } catch {
+            setReportError("결제는 완료됐지만 리포트를 만들지 못했어요. 고객센터로 문의해 주세요.");
+            return false;
+          }
+        },
+      },
+      onEvent: () => {
+        setReportLoading(false);
+        cleanup();
+      },
+      onError: (reason) => {
+        const message = reason instanceof Error ? reason.message.toLowerCase() : String(reason).toLowerCase();
+        setReportLoading(false);
+        if (message.includes("cancel") || message.includes("user_canceled")) {
+          setReportError("결제를 취소했어요. 결제된 금액은 없어요.");
+        } else if (message.includes("already_owned")) {
+          setReportError("처리 중인 구매가 있어요. 잠시 후 다시 확인해 주세요.");
+        } else {
+          setReportError("결제를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
+        }
+        cleanup();
+      },
+    });
+  };
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -469,6 +558,11 @@ function App() {
         <span>최종 갱신 {formatUpdatedAt(generatedAt || lastUpdated)}</span>
       </div>
 
+      <section className="paid-report-card">
+        <div><span>AI 맞춤 분석</span><h2>나만의 복지 리포트</h2><p>가구·소득·직업 상황까지 반영해 신청 우선순위와 다음 행동을 정리해 드려요.</p></div>
+        <button onClick={() => setReportOpen(true)}>1회 990원 <b>›</b></button>
+      </section>
+
       {error && (
         <div className="notice error" role="alert">
           <span>{error}</span>
@@ -483,8 +577,10 @@ function App() {
         <div className="notice">조건에 맞는 혜택이 없어요.</div>
       ) : (
         <section className="policy-list">
-          {visibleItems.map((policy) => (
-            <article className="policy-card" key={policy.id}>
+          {visibleItems.map((policy, index) => (
+            <Suspense key={policy.id} fallback={null}>
+            {index === 9 && !savedOnly && <TossBannerAd />}
+            <article className="policy-card">
               <div className="card-topline">
                 <span>{policy.region || (policy.level === "national" ? "전국" : "지역")}</span>
                 <button
@@ -501,6 +597,7 @@ function App() {
                 <div className="card-meta"><small>{policy.agency}</small><span aria-hidden="true">›</span></div>
               </button>
             </article>
+            </Suspense>
           ))}
         </section>
       )}
@@ -559,6 +656,33 @@ function App() {
           </section>
         </div>
       )}
+      {reportOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => !reportLoading && setReportOpen(false)}>
+          <section className="detail-sheet report-sheet" role="dialog" aria-modal="true" aria-label="맞춤 복지 리포트" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-handle" />
+            <button className="close-button" aria-label="닫기" disabled={reportLoading} onClick={() => setReportOpen(false)}>×</button>
+            <span className="detail-agency">AI 맞춤 분석 · 1회 이용권</span>
+            <h2>내 상황에 맞는 복지를<br />우선순위로 정리해요</h2>
+            {report ? (
+              <div className="report-result">
+                <h3>{report.title}</h3><p>{report.summary}</p>
+                {report.recommendations.map((item, index) => <button key={`${item.policyId}-${index}`} onClick={() => setExternalTarget(item.url)}><b>{index + 1}. {item.title}</b><span>{item.reason}</span><small>{item.agency} · {item.nextStep}</small></button>)}
+                <h4>지금 할 일</h4><ol>{report.actionPlan.map((item) => <li key={item}>{item}</li>)}</ol>
+                <p className="report-disclaimer">AI가 공개 정보를 바탕으로 만든 참고 자료예요. 실제 자격과 신청 조건은 기관에서 최종 확인해 주세요.</p>
+              </div>
+            ) : (
+              <>
+                <p className="report-intro">토스에서 불러온 나이·지역 조건과 아래 내용을 함께 분석해요. 이름과 연락처는 리포트 생성에 보내지 않아요.</p>
+                <label className="report-field"><span>현재 상황</span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 서울 거주 29세, 1인 가구, 월 소득 220만원, 전세 보증금과 취업 지원 혜택을 찾고 있어요." /><small>{reportDetails.length}/700</small></label>
+                <label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>리포트 생성을 위해 입력한 정보가 OpenAI API로 전송되는 것에 동의해요. 생성 후 별도로 저장하지 않아요.</span></label>
+                {reportError && <p className="report-error" role="alert">{reportError}</p>}
+                <button className="tds-primary-button" disabled={reportLoading || !reportConsent || reportDetails.trim().length < 10} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 리포트 받기"}</button>
+                <p className="payment-note">단건 결제 상품이며, 버튼을 누르면 토스 결제 화면이 열려요.</p>
+              </>
+            )}
+          </section>
+        </div>
+      )}
       {externalTarget && (
         <Suspense fallback={<div className="dialog-loading" role="status">확인창을 준비하고 있어요.</div>}>
           <TdsExternalDialog
@@ -588,6 +712,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
             <DetailBlock title="기기에 저장되는 정보" text="저장한 혜택 목록은 앱인토스 기기 저장소에만 보관돼요. 운영자는 이 값을 확인할 수 없으며, 미니앱 데이터를 삭제하면 함께 지워져요." />
             <DetailBlock title="서버에서 처리되는 정보" text="정책 조회 과정의 접속 기록과, 토스 로그인 시 사용자가 동의한 식별키·프로필 정보를 로그인 및 맞춤 안내 목적으로 처리해요. 유저정보 불러오기 결과는 현재 화면에만 표시하고 서버에 저장하지 않아요." />
             <DetailBlock title="외부 서비스" text="정책 데이터 제공과 호스팅을 위해 Vercel 서버와 통신해요. 공식 신청 버튼을 누른 경우 선택한 공공기관 페이지로 이동해요." />
+            <DetailBlock title="유료 AI 리포트" text="사용자가 별도로 동의하고 입력한 상황, 나이·지역·성별·내외국인 조건은 맞춤 복지 리포트 생성을 위해 OpenAI API로 전송돼요. 이름·전화번호·주소는 전송하지 않으며, 서비스 데이터베이스에 리포트 입력값과 결과를 별도로 저장하지 않아요." />
             <DetailBlock title="문의" text="개인정보 관련 문의: fogtemplar@gmail.com" />
           </>
         ) : (
@@ -595,6 +720,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
             <DetailBlock title="서비스 성격" text="나라가쏜다는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
             <DetailBlock title="정보 확인" text="공공기관의 변경 사항이 반영되기까지 시차가 있을 수 있어요. 신청 조건, 금액, 마감일은 반드시 공식 기관 페이지에서 최종 확인해 주세요." />
             <DetailBlock title="외부 페이지" text="공식 기관 페이지를 열면 해당 기관의 이용약관과 개인정보처리방침이 적용돼요." />
+            <DetailBlock title="유료 서비스" text="맞춤 복지 리포트는 1회 990원의 소비성 인앱결제 상품이에요. 결제 완료 후 리포트 생성에 실패하면 상품 지급이 완료되지 않도록 처리하며, 결제·환불은 앱 마켓 및 앱인토스 정책을 따라요." />
             <DetailBlock title="문의" text="서비스 문의: fogtemplar@gmail.com" />
           </>
         )}

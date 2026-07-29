@@ -56,9 +56,18 @@ button { -webkit-tap-highlight-color: transparent; }
 .data-freshness { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -5px 0 14px; color: #8b95a1; font-size: 10px; line-height: 1.45; }
 .data-freshness span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .data-freshness span:last-child { flex: none; }
+.paid-report-card { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin: 0 0 18px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg,#191f28,#333d4b); color: #fff; box-shadow: 0 9px 24px rgba(25,31,40,.16); }
+.paid-report-card span { color: #8ec5ff; font-size: 11px; font-weight: 750; }
+.paid-report-card h2 { margin: 5px 0 5px; font-size: 18px; }
+.paid-report-card p { margin: 0; color: #d1d6db; font-size: 11px; line-height: 1.5; }
+.paid-report-card button { min-width: 105px; padding: 11px 12px; border: 0; border-radius: 13px; background: #fff; color: #191f28; font-size: 12px; font-weight: 750; }
+.paid-report-card button b { margin-left: 3px; color: #8b95a1; font-size: 16px; }
 .saved-filter { min-height: 36px; padding: 0 11px; border: 0; border-radius: 11px; background: #f2f4f6; color: #8b95a1; font-size: 12px; font-weight: 700; }
 .saved-filter.active, .heart.active { color: #f04452; background: #fff0f1; }
 .policy-list { display: grid; gap: 11px; }
+.toss-banner { display: none; overflow: hidden; border-radius: 18px; }
+.toss-banner.visible { display: block; }
+.toss-banner > span { display: block; margin: 0 0 5px 4px; color: #adb5bd; font-size: 9px; }
 .policy-card { padding: 17px; border: 1px solid #e8ebed; border-radius: 19px; background: #fff; box-shadow: 0 5px 18px rgba(0,27,55,.045); transition: transform .15s ease, box-shadow .15s ease; }
 .policy-card:active { transform: scale(.985); box-shadow: 0 2px 8px rgba(0,27,55,.04); }
 .card-topline { display: flex; align-items: center; justify-content: space-between; color: #1b64da; font-size: 11px; font-weight: 750; }
@@ -108,6 +117,24 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .profile-grid strong { color: #333d4b; font-size: 13px; overflow-wrap: anywhere; }
 .logout-button, .reset-button { width: 100%; height: 48px; margin-top: 8px; border: 0; border-radius: 13px; background: transparent; color: #6b7684; font-size: 13px; font-weight: 650; }
 .reset-button { background: #f2f4f6; color: #4e5968; }
+.report-intro { margin: -10px 0 18px; color: #6b7684; font-size: 13px; line-height: 1.6; }
+.report-field { display: grid; gap: 8px; }
+.report-field > span { font-size: 13px; font-weight: 700; }
+.report-field textarea { width: 100%; min-height: 130px; resize: vertical; padding: 14px; border: 1px solid #d1d6db; border-radius: 15px; outline: 0; color: #191f28; font: inherit; font-size: 14px; line-height: 1.55; }
+.report-field textarea:focus { border-color: #3182f6; box-shadow: 0 0 0 3px rgba(49,130,246,.1); }
+.report-field small { justify-self: end; color: #8b95a1; font-size: 10px; }
+.report-consent { display: grid; grid-template-columns: 20px 1fr; gap: 9px; margin: 16px 0; color: #6b7684; font-size: 11px; line-height: 1.5; }
+.report-consent input { width: 18px; height: 18px; accent-color: #3182f6; }
+.report-error { padding: 11px; border-radius: 11px; background: #fff0f1; color: #d22030; font-size: 12px; }
+.payment-note,.report-disclaimer { color: #8b95a1; font-size: 10px; line-height: 1.5; text-align: center; }
+.report-result > h3 { margin: 0 0 7px; font-size: 19px; }
+.report-result > p { color: #6b7684; font-size: 13px; line-height: 1.6; }
+.report-result > button { display: grid; gap: 5px; width: 100%; margin: 9px 0; padding: 15px; border: 0; border-radius: 15px; background: #f7f8fa; text-align: left; }
+.report-result > button b { color: #191f28; font-size: 14px; }
+.report-result > button span { color: #4e5968; font-size: 12px; line-height: 1.5; }
+.report-result > button small { color: #3182f6; font-size: 10px; }
+.report-result h4 { margin-bottom: 7px; }
+.report-result ol { margin-top: 0; padding-left: 21px; color: #4e5968; font-size: 12px; line-height: 1.7; }
 
 @media (max-width: 374px) {
   .app-shell { padding-left: 14px; padding-right: 14px; }
@@ -115,5 +142,7 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
   .brand-lockup span { display: none; }
   .search-panel { grid-template-columns: 1fr 108px; }
   .category-row { margin-left: -14px; margin-right: -14px; padding-left: 14px; }
+  .paid-report-card { grid-template-columns: 1fr; }
+  .paid-report-card button { width: 100%; }
 }
 @media (min-width: 560px) { body { background: #eef1f5; } .app-shell { box-shadow: 0 0 40px rgba(0,27,55,.08); } }
