@@ -22,7 +22,7 @@ export default defineConfig({
     allowsBackForwardNavigationGestures: true,
   },
   navigationBar: {
-    withBackButton: false,
+    withBackButton: true,
     withHomeButton: true,
     withTitle: true,
     theme: "light",

@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import type { TossProfile, TossTokens } from "./toss-login";
 
-export const TOSS_SESSION_COOKIE = "welfare_toss_session";
+export const TOSS_SESSION_COOKIE = "welfare_toss_session_v2";
 
 export type TossSession = {
   profile: TossProfile;
@@ -50,6 +50,6 @@ export const sessionCookieOptions = {
   httpOnly: true,
   secure: true,
   sameSite: "none" as const,
-  path: "/api/toss",
+  path: "/api",
   maxAge: 14 * 24 * 60 * 60,
 };

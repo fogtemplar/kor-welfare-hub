@@ -1,4 +1,4 @@
-import { TossAds } from "@apps-in-toss/web-framework";
+import { eventLog, TossAds } from "@apps-in-toss/web-framework";
 import { useEffect, useRef, useState } from "react";
 
 const AD_GROUP_ID = import.meta.env.VITE_TOSS_BANNER_AD_GROUP_ID?.trim() || "ait.v2.live.04170610c4b54e80";
@@ -26,9 +26,18 @@ export default function TossBannerAd() {
             tone: "grey",
             variant: "card",
             callbacks: {
-              onAdRendered: () => setVisible(true),
-              onNoFill: () => setVisible(false),
-              onAdFailedToRender: () => setVisible(false),
+              onAdRendered: () => {
+                setVisible(true);
+                void eventLog({ log_name: "welfare_banner_rendered", log_type: "event", params: { placement: "onboarding" } }).catch(() => undefined);
+              },
+              onNoFill: () => {
+                setVisible(false);
+                void eventLog({ log_name: "welfare_banner_no_fill", log_type: "event", params: { placement: "onboarding" } }).catch(() => undefined);
+              },
+              onAdFailedToRender: () => {
+                setVisible(false);
+                void eventLog({ log_name: "welfare_banner_failed", log_type: "event", params: { placement: "onboarding" } }).catch(() => undefined);
+              },
             },
           });
           destroySlot = slot.destroy;

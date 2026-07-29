@@ -1,4 +1,4 @@
-import { appLogin, eventLog, getConsentedUserData, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
+import { appLogin, closeView, eventLog, getConsentedUserData, getSchemeUri, graniteEvent, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
 import { lazy, Suspense, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import "./App.css";
 
@@ -226,10 +226,30 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!profile) return;
+    fetch(`${API_BASE}/api/toss/reports/latest`, { credentials: "include" })
+      .then((response) => response.ok ? response.json() : { report: null })
+      .then((data: { report: StoredReport | null }) => {
+        if (!data.report) return;
+        setStoredReport(data.report);
+        localStorage.setItem(REPORT_KEY, JSON.stringify(data.report));
+        track("welfare_report_restored", { source: "server" });
+      })
+      .catch(() => undefined);
+  }, [profile]);
+
+  useEffect(() => {
     try {
       const savedProfile = localStorage.getItem(PROFILE_KEY);
       if (savedProfile) setReportProfile((current) => ({ ...current, ...(JSON.parse(savedProfile) as Partial<ReportProfile>) }));
-      if (!localStorage.getItem(ONBOARDING_KEY)) setOnboardingOpen(true);
+      let scheme = "";
+      try { scheme = getSchemeUri(); } catch { scheme = window.location.href; }
+      const personalizedEntry = /(?:personalized|welfare-report|맞춤)/i.test(scheme);
+      if (personalizedEntry || !localStorage.getItem(ONBOARDING_KEY)) {
+        setOnboardingStep(0);
+        setOnboardingOpen(true);
+        if (personalizedEntry) track("welfare_feature_entry", { feature: "personalized" });
+      }
     } catch {
       setOnboardingOpen(true);
     }
@@ -306,6 +326,42 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      track("welfare_client_error", { type: "error", message: String(event.message || "unknown").slice(0, 120) });
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const message = event.reason instanceof Error ? event.reason.message : String(event.reason || "unknown");
+      track("welfare_client_error", { type: "unhandled_rejection", message: message.slice(0, 120) });
+    };
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      return graniteEvent.addEventListener("backEvent", {
+        onEvent: () => {
+          if (externalTarget) return setExternalTarget(null);
+          if (legal) return setLegal(null);
+          if (selected) return setSelected(null);
+          if (accountOpen) return setAccountOpen(false);
+          if (reportNudgeOpen) return setReportNudgeOpen(false);
+          if (reportOpen && !reportLoading) return setReportOpen(false);
+          if (onboardingOpen && onboardingStep > 0) return setOnboardingStep((current) => current - 1);
+          void closeView();
+        },
+        onError: () => track("welfare_client_error", { type: "back_event", message: "back event failed" }),
+      });
+    } catch {
+      return undefined;
+    }
+  }, [accountOpen, externalTarget, legal, onboardingOpen, onboardingStep, reportLoading, reportNudgeOpen, reportOpen, selected]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedQuery(query.trim());
       setPage(0);
@@ -367,6 +423,7 @@ function App() {
     sessionStorage.setItem(key, "shown");
     setReportNudgePending(false);
     setReportNudgeOpen(true);
+    track("welfare_report_nudge_impression", { matched_count: count });
   }, [accountOpen, consentedData, count, loading, onboardingOpen, reportNudgePending, reportOpen]);
 
   useEffect(() => {
@@ -446,6 +503,7 @@ function App() {
   const generateReport = async (orderId: string) => {
     const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         orderId,
@@ -646,12 +704,12 @@ function App() {
       setReportNudgePending(true);
     }
     setOnboardingOpen(false);
-    track("welfare_onboarding_complete", { interests: reportProfile.interests.length });
+    track(showReportNudge ? "welfare_onboarding_complete" : "welfare_onboarding_skip", { interests: reportProfile.interests.length, step: onboardingStep + 1 });
   };
 
   return (
     <main className="app-shell">
-      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} total={total} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={setOnboardingStep} onDone={() => finishOnboarding(true)} onSkip={() => finishOnboarding(false)} />}
+      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} total={total} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={(nextStep) => { track("welfare_onboarding_step", { step: nextStep + 1 }); setOnboardingStep(nextStep); }} onDone={() => finishOnboarding(true)} onSkip={() => finishOnboarding(false)} />}
       <header className="hero">
         <div className="account-row">
           <div className="brand-lockup">
@@ -829,7 +887,7 @@ function App() {
             <p>AI가 실제 신청 가능성을 한 번 더 분석하고, 놓치기 쉬운 혜택부터 순서대로 정리해 드릴게요.</p>
             <div className="nudge-price"><s>1,990원</s><strong>출시 기념 990원</strong></div>
             <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReport(storedReport?.report || null); setReportOpen(true); }}>AI 상세 분석 990원에 보기</button>
-            <button className="nudge-later" onClick={() => setReportNudgeOpen(false)}>무료 조회 결과 계속 보기</button>
+            <button className="nudge-later" onClick={() => { track("welfare_report_nudge_dismiss"); setReportNudgeOpen(false); }}>무료 조회 결과 계속 보기</button>
           </section>
         </div>
       )}
@@ -937,7 +995,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
   };
 
   return <div className="first-onboarding" role="dialog" aria-modal="true" aria-label="맞춤 혜택 설정">
-    <div className="onboarding-top"><button disabled={step === 0} onClick={() => onStep(step - 1)} aria-label="이전">‹</button><div><span>{step + 1}</span> / {steps.length}</div><button onClick={onSkip}>건너뛰기</button></div>
+    <div className="onboarding-top"><span aria-hidden="true" /><div><span>{step + 1}</span> / {steps.length}</div><button onClick={onSkip}>건너뛰기</button></div>
     <div className="onboarding-progress"><i style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
     <section className="onboarding-content">
       {step === 0 ? <div className="onboarding-brand-intro"><img src={BRAND_ICON} alt="나라가쏜다 로고" /><strong>나라가쏜다</strong><h1>나도 몰랐던 <em>{total > 0 ? total.toLocaleString() : "20,854"}개의</em><br />정부 복지혜택을 찾아보세요</h1><p>토스로 로그인하면 내 조건에 맞는 혜택을 빠르게 찾아드려요.</p></div> : <><span className="onboarding-eyebrow">내 조건에 맞는 숨은 혜택 찾기</span><h1>{steps[step].title}</h1><p>{steps[step].description}</p></>}

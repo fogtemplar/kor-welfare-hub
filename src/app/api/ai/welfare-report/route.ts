@@ -1,6 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { CURATED_POLICIES } from "@/lib/data/policies";
+import { saveUserReport } from "@/lib/report-store";
 import { fetchExternalPolicies } from "@/lib/scrapers/aggregate";
+import { getTossIapOrderStatus } from "@/lib/toss-login";
+import { openSession, TOSS_SESSION_COOKIE } from "@/lib/toss-session";
 import type { Policy } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -38,7 +41,7 @@ function getOutputText(payload: unknown): string {
   return response.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text || "";
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   if (!process.env.OPENAI_API_KEY) return NextResponse.json({ error: "AI_REPORT_NOT_CONFIGURED" }, { status: 503 });
 
   let body: ReportRequest;
@@ -49,6 +52,20 @@ export async function POST(request: Request) {
   const details = String(body.details || "").trim();
   if (orderId.length < 8 || details.length > 700 || !body.profile?.household || !body.profile?.housing || !body.profile?.incomePct) return NextResponse.json({ error: "INVALID_REPORT_REQUEST" }, { status: 400 });
   if (/\d{6}\s*-?\s*[1-4]\d{6}/.test(details)) return NextResponse.json({ error: "주민등록번호는 입력할 수 없어요." }, { status: 400 });
+
+  const session = openSession(request.cookies.get(TOSS_SESSION_COOKIE)?.value || "");
+  if (!session) return NextResponse.json({ error: "TOSS_LOGIN_REQUIRED" }, { status: 401 });
+  try {
+    const order = await getTossIapOrderStatus(orderId, session.profile.userKey);
+    const validStatus = order.status === "PAYMENT_COMPLETED" || order.status === "PURCHASED";
+    const expectedSku = process.env.TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
+    if (!validStatus || order.sku !== expectedSku) {
+      return NextResponse.json({ error: "PAYMENT_NOT_VERIFIED" }, { status: 402 });
+    }
+  } catch (error) {
+    console.error("[ai/welfare-report] order verification failed", error);
+    return NextResponse.json({ error: "PAYMENT_VERIFICATION_FAILED" }, { status: 503 });
+  }
 
   pruneOrders();
   const existing = recentOrders.get(orderId);
@@ -107,6 +124,11 @@ export async function POST(request: Request) {
     if (!outputText) throw new Error("EMPTY_REPORT");
     const report = JSON.parse(outputText) as unknown;
     recentOrders.set(orderId, { createdAt: Date.now(), report });
+    try {
+      await saveUserReport(session.profile.userKey, { orderId, createdAt: new Date().toISOString(), report });
+    } catch (storeError) {
+      console.error("[ai/welfare-report] persistent save failed", storeError);
+    }
     return NextResponse.json(report, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     recentOrders.delete(orderId);

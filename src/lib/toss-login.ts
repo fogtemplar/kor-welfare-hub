@@ -30,7 +30,7 @@ function certificate(value: string | undefined) {
   return value?.replace(/\\n/g, "\n").trim();
 }
 
-function tossRequest<T>(path: string, method: "GET" | "POST", body?: unknown, accessToken?: string): Promise<T> {
+function tossRequest<T>(path: string, method: "GET" | "POST", body?: unknown, accessToken?: string, extraHeaders: Record<string, string> = {}): Promise<T> {
   const cert = certificate(process.env.TOSS_MTLS_CERT);
   const key = certificate(process.env.TOSS_MTLS_KEY);
   if (!cert || !key) throw new Error("TOSS_LOGIN_NOT_CONFIGURED");
@@ -47,6 +47,7 @@ function tossRequest<T>(path: string, method: "GET" | "POST", body?: unknown, ac
         "Content-Type": "application/json",
         ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...extraHeaders,
       },
       timeout: 10_000,
     }, (response) => {
@@ -70,6 +71,24 @@ function tossRequest<T>(path: string, method: "GET" | "POST", body?: unknown, ac
     if (payload) req.write(payload);
     req.end();
   });
+}
+
+export type TossIapOrderStatus = {
+  orderId: string;
+  sku: string;
+  statusDeterminedAt: string;
+  status: "PURCHASED" | "PAYMENT_COMPLETED" | "FAILED" | "REFUNDED" | "ORDER_IN_PROGRESS" | "NOT_FOUND" | "MINIAPP_MISMATCH" | "ERROR";
+  reason: string;
+};
+
+export function getTossIapOrderStatus(orderId: string, userKey: number) {
+  return tossRequest<TossIapOrderStatus>(
+    "/api-partner/v1/apps-in-toss/order/get-order-status",
+    "POST",
+    { orderId },
+    undefined,
+    { "x-toss-user-key": String(userKey) },
+  );
 }
 
 export function generateTossTokens(authorizationCode: string, referrer: "DEFAULT" | "SANDBOX") {
