@@ -14,12 +14,12 @@ type ReportRequest = {
   profile?: { household?: string; housing?: string; statuses?: string[]; incomePct?: string; childrenCount?: string; youngestChildAge?: string; pregnant?: boolean; hasDisability?: boolean };
 };
 
-const recentOrders = new Map<string, number>();
+const recentOrders = new Map<string, { createdAt: number; report?: unknown }>();
 const ORDER_TTL_MS = 24 * 60 * 60 * 1000;
 
 function pruneOrders() {
   const cutoff = Date.now() - ORDER_TTL_MS;
-  for (const [id, createdAt] of recentOrders) if (createdAt < cutoff) recentOrders.delete(id);
+  for (const [id, value] of recentOrders) if (value.createdAt < cutoff) recentOrders.delete(id);
 }
 
 function scorePolicy(policy: Policy, request: ReportRequest): number {
@@ -51,8 +51,10 @@ export async function POST(request: Request) {
   if (/\d{6}\s*-?\s*[1-4]\d{6}/.test(details)) return NextResponse.json({ error: "주민등록번호는 입력할 수 없어요." }, { status: 400 });
 
   pruneOrders();
-  if (recentOrders.has(orderId)) return NextResponse.json({ error: "ORDER_ALREADY_PROCESSED" }, { status: 409 });
-  recentOrders.set(orderId, Date.now());
+  const existing = recentOrders.get(orderId);
+  if (existing?.report) return NextResponse.json(existing.report, { headers: { "Cache-Control": "no-store" } });
+  if (existing) return NextResponse.json({ error: "ORDER_PROCESSING" }, { status: 409 });
+  recentOrders.set(orderId, { createdAt: Date.now() });
 
   try {
     const policies = [...CURATED_POLICIES, ...(await fetchExternalPolicies())]
@@ -91,7 +93,9 @@ export async function POST(request: Request) {
     const payload = await response.json();
     const outputText = getOutputText(payload);
     if (!outputText) throw new Error("EMPTY_REPORT");
-    return NextResponse.json(JSON.parse(outputText), { headers: { "Cache-Control": "no-store" } });
+    const report = JSON.parse(outputText) as unknown;
+    recentOrders.set(orderId, { createdAt: Date.now(), report });
+    return NextResponse.json(report, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     recentOrders.delete(orderId);
     console.error("[ai/welfare-report] failed", error);

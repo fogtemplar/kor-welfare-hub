@@ -1,4 +1,4 @@
-import { appLogin, getConsentedUserData, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
+import { appLogin, eventLog, getConsentedUserData, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import "./App.css";
 
@@ -9,6 +9,9 @@ const API_BASE = "https://kor-welfare-hub.vercel.app";
 const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
+const CHECKLIST_KEY = "kor-welfare-hub:ait:checklists:v1";
+const REPORT_KEY = "kor-welfare-hub:ait:last-report:v1";
+const PENDING_REPORT_KEY = "kor-welfare-hub:ait:pending-report:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
 const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
 
@@ -19,6 +22,8 @@ type WelfareReport = {
   cautions: string[];
   recommendations: Array<{ policyId: string; title: string; agency: string; reason: string; nextStep: string; url: string }>;
 };
+
+type StoredReport = { orderId: string; createdAt: string; report: WelfareReport };
 
 type ReportProfile = {
   household: string;
@@ -161,6 +166,13 @@ function App() {
   const [reportConsent, setReportConsent] = useState(false);
   const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
   const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
+  const [storedReport, setStoredReport] = useState<StoredReport | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState("");
+  const [checklists, setChecklists] = useState<Record<string, boolean[]>>({});
+
+  const track = (name: string, params: Record<string, string | number | boolean | null> = {}) => {
+    void eventLog({ log_name: name, log_type: "event", params }).catch(() => undefined);
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/api/toss/session`, { credentials: "include" })
@@ -170,6 +182,27 @@ function App() {
         setLoginAvailable(Boolean(data.configured));
       })
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const rawReport = localStorage.getItem(REPORT_KEY);
+      const rawPending = localStorage.getItem(PENDING_REPORT_KEY);
+      const rawChecklists = localStorage.getItem(CHECKLIST_KEY);
+      if (rawReport) setStoredReport(JSON.parse(rawReport) as StoredReport);
+      if (rawPending) setPendingOrderId(rawPending);
+      if (rawChecklists) setChecklists(JSON.parse(rawChecklists) as Record<string, boolean[]>);
+    } catch {
+      // 손상된 로컬 데이터는 무시하고 새로 시작해요.
+    }
+    track("welfare_home_view");
+    IAP.getPendingOrders().then((result) => {
+      const pending = result?.orders.find((order) => order.sku === REPORT_SKU);
+      if (pending) {
+        localStorage.setItem(PENDING_REPORT_KEY, pending.orderId);
+        setPendingOrderId(pending.orderId);
+      }
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -258,6 +291,7 @@ function App() {
         setHasMore(data.hasMore);
         setGeneratedAt(data.generatedAt);
         setLastUpdated(data.lastUpdated);
+        if (page === 0) track("welfare_lookup_complete", { count: data.count, personalized: Boolean(consentedData) });
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -268,7 +302,7 @@ function App() {
       });
 
     return () => controller.abort();
-  }, [age, category, debouncedQuery, page, region, retryNonce]);
+  }, [age, category, consentedData, debouncedQuery, page, region, retryNonce]);
 
   useEffect(() => {
     if (!consentedData || loading || count === 0 || accountOpen || reportOpen) return;
@@ -338,8 +372,67 @@ function App() {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       void persistSaved(next);
+      track(next.has(id) ? "welfare_save" : "welfare_unsave", { policy_id: id });
       return next;
     });
+  };
+
+  const checklistItems = (policy: Policy) => [
+    "지원 대상과 소득 기준 확인",
+    policy.howTo ? "신청 방법과 접수처 확인" : "공식 기관에서 신청 방법 확인",
+    "필요 서류 준비",
+    "신청 완료",
+  ];
+
+  const toggleChecklist = (policyId: string, index: number) => {
+    setChecklists((current) => {
+      const next = { ...current, [policyId]: [...(current[policyId] || [false, false, false, false])] };
+      next[policyId][index] = !next[policyId][index];
+      localStorage.setItem(CHECKLIST_KEY, JSON.stringify(next));
+      track("welfare_checklist_toggle", { policy_id: policyId, step: index + 1, checked: next[policyId][index] });
+      return next;
+    });
+  };
+
+  const saveReport = (orderId: string, nextReport: WelfareReport) => {
+    const stored = { orderId, createdAt: new Date().toISOString(), report: nextReport };
+    localStorage.setItem(REPORT_KEY, JSON.stringify(stored));
+    localStorage.removeItem(PENDING_REPORT_KEY);
+    setStoredReport(stored);
+    setPendingOrderId("");
+    setReport(nextReport);
+  };
+
+  const generateReport = async (orderId: string) => {
+    const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId,
+        retry: pendingOrderId === orderId,
+        details: reportDetails.trim(),
+        filters: { age, region, category },
+        profile: reportProfile,
+        tossData: consentedData ? { gender: consentedData.USER_GENDER, nationality: consentedData.USER_NATIONALITY } : undefined,
+      }),
+    });
+    const data = await response.json() as WelfareReport & { error?: string };
+    if (!response.ok) throw new Error(data.error || "REPORT_FAILED");
+    saveReport(orderId, data);
+    track("welfare_report_complete");
+  };
+
+  const retryPendingReport = async () => {
+    if (!pendingOrderId) return;
+    setReportLoading(true);
+    setReportError("");
+    try {
+      await generateReport(pendingOrderId);
+    } catch {
+      setReportError("리포트 생성에 다시 실패했어요. 입력 정보와 인터넷 연결을 확인한 뒤 재시도해 주세요.");
+    } finally {
+      setReportLoading(false);
+    }
   };
 
   const openExternal = async (url: string) => {
@@ -447,6 +540,7 @@ function App() {
     }
     setReportLoading(true);
     setReportError("");
+    track("welfare_report_payment_start");
     try {
       const catalog = await IAP.getProductItemList();
       const product = catalog?.products.find((item) => item.sku === REPORT_SKU);
@@ -470,27 +564,14 @@ function App() {
       options: {
         sku: REPORT_SKU,
         processProductGrant: async ({ orderId }) => {
+          localStorage.setItem(PENDING_REPORT_KEY, orderId);
+          setPendingOrderId(orderId);
           try {
-            const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                orderId,
-                details: reportDetails.trim(),
-                filters: { age, region, category },
-                profile: reportProfile,
-                tossData: consentedData ? {
-                  gender: consentedData.USER_GENDER,
-                  nationality: consentedData.USER_NATIONALITY,
-                } : undefined,
-              }),
-            });
-            const data = await response.json() as WelfareReport & { error?: string };
-            if (!response.ok) throw new Error(data.error || "REPORT_FAILED");
-            setReport(data);
+            await generateReport(orderId);
             return true;
           } catch {
-            setReportError("결제는 완료됐지만 리포트를 만들지 못했어요. 고객센터로 문의해 주세요.");
+            setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
+            track("welfare_report_generation_failed");
             return false;
           }
         },
@@ -548,8 +629,8 @@ function App() {
       {!online && <div className="network-banner" role="status">오프라인 상태예요. 연결되면 다시 시도해 주세요.</div>}
 
       <section className="paid-report-card featured">
-        <div className="report-card-copy"><span className="report-launch-badge">출시 기념 50% 할인</span><h2>받을 수 있는 혜택,<br />AI가 순서대로 정리해요</h2><p>가구·소득·직업까지 분석한 신청 우선순위와 준비서류를 확인하세요.</p></div>
-        <button className="report-price-button" onClick={() => setReportOpen(true)}><small>1,990원</small><span>990원에 보기</span><b>›</b></button>
+        <div className="report-card-copy"><span className="report-launch-badge">출시 기념가</span><h2>받을 수 있는 혜택,<br />AI가 순서대로 정리해요</h2><p>가구·소득·직업까지 분석한 신청 우선순위와 준비서류를 확인하세요.</p></div>
+        <button className="report-price-button" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReport(storedReport?.report || null); setReportOpen(true); }}><span>{storedReport ? "최근 리포트 보기" : "990원에 보기"}</span><b>›</b></button>
       </section>
 
       <section className="search-panel" aria-label="혜택 검색">
@@ -609,7 +690,7 @@ function App() {
             {index === 9 && !savedOnly && <TossBannerAd />}
             <article className="policy-card">
               <div className="card-topline">
-                <span>{policy.region || (policy.level === "national" ? "전국" : "지역")}</span>
+                <div className="policy-badges"><span>{policy.region || (policy.level === "national" ? "전국" : "지역")}</span><DeadlineBadge policy={policy} /></div>
                 <button
                   className={saved.has(policy.id) ? "heart active" : "heart"}
                   aria-label={saved.has(policy.id) ? "저장 취소" : "혜택 저장"}
@@ -653,6 +734,11 @@ function App() {
             <DetailBlock title="지원 내용" text={selected.benefit || selected.summary} />
             <DetailBlock title="신청 대상" text={selected.eligibility} />
             <DetailBlock title="신청 방법" text={selected.howTo} />
+            <div className="application-checklist">
+              <h3>신청 체크리스트</h3>
+              <p>확인한 항목은 이 기기에 저장돼요.</p>
+              {checklistItems(selected).map((item, index) => <label key={item}><input type="checkbox" checked={Boolean(checklists[selected.id]?.[index])} onChange={() => toggleChecklist(selected.id, index)} /><span>{item}</span></label>)}
+            </div>
             <div className="source-panel">
               <span>정보 출처</span>
               <strong>{SOURCE_LABELS[selected.source || ""] || selected.agency}</strong>
@@ -690,8 +776,8 @@ function App() {
             <span className="nudge-badge">무료 조회 완료</span>
             <h2>조건상 확인해 볼 혜택이<br /><em>{count.toLocaleString()}개</em> 있어요</h2>
             <p>AI가 실제 신청 가능성을 한 번 더 분석하고, 놓치기 쉬운 혜택부터 순서대로 정리해 드릴게요.</p>
-            <div className="nudge-price"><s>1,990원</s><strong>출시 기념 990원</strong></div>
-            <button className="tds-primary-button" onClick={() => { setReportNudgeOpen(false); setReportOpen(true); }}>전체 맞춤 리포트 보기</button>
+            <div className="nudge-price"><strong>출시 기념가 990원</strong></div>
+            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReport(storedReport?.report || null); setReportOpen(true); }}>전체 맞춤 리포트 보기</button>
             <button className="nudge-later" onClick={() => setReportNudgeOpen(false)}>무료 조회 결과 계속 보기</button>
           </section>
         </div>
@@ -705,6 +791,7 @@ function App() {
             <h2>내 상황에 맞는 복지를<br />우선순위로 정리해요</h2>
             {report ? (
               <div className="report-result">
+                {storedReport && <div className="report-saved-at">최근 리포트 · {new Date(storedReport.createdAt).toLocaleDateString("ko-KR")}</div>}
                 <h3>{report.title}</h3><p>{report.summary}</p>
                 {report.recommendations.map((item, index) => <button key={`${item.policyId}-${index}`} onClick={() => setExternalTarget(item.url)}><b>{index + 1}. {item.title}</b><span>{item.reason}</span><small>{item.agency} · {item.nextStep}</small></button>)}
                 <h4>지금 할 일</h4><ol>{report.actionPlan.map((item) => <li key={item}>{item}</li>)}</ol>
@@ -722,9 +809,9 @@ function App() {
                 <label className="report-field"><span>가장 필요한 지원 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 전세 보증금과 취업 준비 비용 지원을 우선 확인하고 싶어요." /><small>{reportDetails.length}/700</small></label>
                 <label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>리포트 생성을 위해 입력한 정보가 OpenAI API로 전송되는 것에 동의해요. 생성 후 별도로 저장하지 않아요.</span></label>
                 {reportError && <p className="report-error" role="alert">{reportError}</p>}
-                <div className="report-price-summary"><span>정상가 <s>1,990원</s></span><strong>출시 기념가 990원</strong></div>
-                <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 전체 리포트 보기"}</button>
-                <p className="payment-note">50% 출시 할인 · 실제 결제금액 990원 · 단건 결제 상품이에요.</p>
+                <div className="report-price-summary"><span>단건 결제</span><strong>출시 기념가 990원</strong></div>
+                {pendingOrderId ? <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void retryPendingReport()}>{reportLoading ? "리포트 만드는 중…" : "추가 결제 없이 리포트 다시 만들기"}</button> : <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 전체 리포트 보기"}</button>}
+                <p className="payment-note">실제 결제금액 990원 · 단건 결제 상품이에요. 생성에 실패하면 추가 결제 없이 다시 시도할 수 있어요.</p>
               </>
             )}
           </section>
@@ -744,6 +831,17 @@ function App() {
       )}
     </main>
   );
+}
+
+function DeadlineBadge({ policy }: { policy: Policy }) {
+  if (policy.isAlwaysOpen) return <span className="deadline-badge always">상시 신청</span>;
+  if (!policy.deadline) return null;
+  const deadline = new Date(policy.deadline);
+  if (Number.isNaN(deadline.getTime())) return <span className="deadline-badge">{policy.deadline}</span>;
+  const days = Math.ceil((deadline.getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return <span className="deadline-badge closed">마감 확인</span>;
+  if (days <= 30) return <span className="deadline-badge urgent">D-{days}</span>;
+  return <span className="deadline-badge">~ {deadline.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>;
 }
 
 function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () => void }) {
