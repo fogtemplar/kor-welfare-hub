@@ -9,8 +9,8 @@ type StoredReportEnvelope = {
 const REPORT_TTL_SECONDS = 90 * 24 * 60 * 60;
 
 function config() {
-  const url = (process.env.REPORT_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL)?.replace(/\/$/, "");
-  const token = process.env.REPORT_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = (process.env.REPORT_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL)?.replace(/\/$/, "");
+  const token = process.env.REPORT_REDIS_REST_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   return url && token ? { url, token } : null;
 }
 
@@ -69,4 +69,3 @@ export async function getLatestUserReport(userKey: number) {
   const result = await command(["GET", `welfare:report:user:${userKey}:latest`]);
   return typeof result === "string" ? open(result) : null;
 }
-
