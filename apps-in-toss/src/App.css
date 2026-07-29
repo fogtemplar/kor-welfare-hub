@@ -64,6 +64,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .paid-report-card button { min-width: 105px; padding: 11px 12px; border: 0; border-radius: 13px; background: #fff; color: #191f28; font-size: 12px; font-weight: 750; }
 .report-card-copy { position: relative; z-index: 1; }
 .paid-report-card .report-launch-badge { display: inline-flex; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,.18); color: #fff; font-size: 10px; }
+.report-card-actions { position: relative; z-index: 1; display: grid; gap: 7px; min-width: 108px; }
+.paid-report-card .report-demo-button { background: rgba(255,255,255,.16); color: #fff; border: 1px solid rgba(255,255,255,.25); }
 .paid-report-card button b { margin-left: 3px; color: #8b95a1; font-size: 16px; }
 .paid-report-card .report-price-button { display: grid; grid-template-columns: 1fr auto; align-items: center; text-align: left; }
 .paid-report-card .report-price-button small { grid-column: 1; color: #8b95a1; font-size: 10px; font-weight: 600; text-decoration: line-through; }
@@ -161,6 +163,7 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-price-summary span { color: #8b95a1; font-size: 11px; }
 .report-price-summary strong { color: #f04452; font-size: 14px; }
 .report-saved-at { margin-bottom: 10px; color: #8b95a1; font-size: 10px; }
+.report-demo-notice { margin-bottom: 11px; padding: 10px 12px; border-radius: 11px; background: #fff3db; color: #8f4b00; font-size: 10px; line-height: 1.5; text-align: center; }
 .report-document-head { margin: 0 -2px 18px; padding: 20px; border-radius: 18px; background: linear-gradient(145deg,#172b4d,#1b64da); color: #fff; }
 .report-document-head > span { font-size: 10px; font-weight: 750; opacity: .7; }
 .report-document-head h3 { margin: 12px 0 7px; font-size: 21px; line-height: 1.35; }
