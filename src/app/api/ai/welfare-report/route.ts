@@ -11,6 +11,7 @@ type ReportRequest = {
   details?: string;
   filters?: { age?: number | null; region?: string; category?: string };
   tossData?: { gender?: string; nationality?: string };
+  profile?: { household?: string; housing?: string; statuses?: string[]; incomePct?: string; childrenCount?: string; youngestChildAge?: string; pregnant?: boolean; hasDisability?: boolean };
 };
 
 const recentOrders = new Map<string, number>();
@@ -23,7 +24,8 @@ function pruneOrders() {
 
 function scorePolicy(policy: Policy, request: ReportRequest): number {
   const text = `${policy.title} ${policy.summary} ${policy.benefit} ${policy.eligibility}`.toLowerCase();
-  const terms = String(request.details || "").toLowerCase().split(/[^0-9a-z가-힣]+/).filter((term) => term.length >= 2);
+  const profileText = JSON.stringify(request.profile || {});
+  const terms = `${String(request.details || "")} ${profileText}`.toLowerCase().split(/[^0-9a-z가-힣]+/).filter((term) => term.length >= 2);
   let score = terms.reduce((sum, term) => sum + (text.includes(term) ? 2 : 0), 0);
   if (request.filters?.category && request.filters.category !== "all" && policy.category === request.filters.category) score += 5;
   if (!policy.region || policy.region === "전국" || policy.region === request.filters?.region) score += 2;
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
 
   const orderId = String(body.orderId || "").trim();
   const details = String(body.details || "").trim();
-  if (orderId.length < 8 || details.length < 10 || details.length > 700) return NextResponse.json({ error: "INVALID_REPORT_REQUEST" }, { status: 400 });
+  if (orderId.length < 8 || details.length > 700 || !body.profile?.household || !body.profile?.housing || !body.profile?.incomePct) return NextResponse.json({ error: "INVALID_REPORT_REQUEST" }, { status: 400 });
   if (/\d{6}\s*-?\s*[1-4]\d{6}/.test(details)) return NextResponse.json({ error: "주민등록번호는 입력할 수 없어요." }, { status: 400 });
 
   pruneOrders();
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-5.6",
         instructions: "당신은 한국 복지 정책 안내 도우미입니다. 제공된 후보 정책만 추천하고 자격을 확정적으로 단정하지 마세요. 사용자가 당장 확인할 순서와 준비할 내용을 간결한 한국어 해요체로 작성하세요. 입력에 포함된 개인정보를 답변에 불필요하게 반복하지 마세요.",
-        input: JSON.stringify({ user: { details, age: body.filters?.age, region: body.filters?.region, category: body.filters?.category, gender: body.tossData?.gender, nationality: body.tossData?.nationality }, candidatePolicies: policies }),
+        input: JSON.stringify({ user: { details, age: body.filters?.age, region: body.filters?.region, category: body.filters?.category, gender: body.tossData?.gender, nationality: body.tossData?.nationality, ...body.profile }, candidatePolicies: policies }),
         text: {
           format: {
             type: "json_schema",

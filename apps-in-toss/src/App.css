@@ -123,6 +123,21 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-field textarea { width: 100%; min-height: 130px; resize: vertical; padding: 14px; border: 1px solid #d1d6db; border-radius: 15px; outline: 0; color: #191f28; font: inherit; font-size: 14px; line-height: 1.55; }
 .report-field textarea:focus { border-color: #3182f6; box-shadow: 0 0 0 3px rgba(49,130,246,.1); }
 .report-field small { justify-self: end; color: #8b95a1; font-size: 10px; }
+.report-field > span small,.report-question strong small { margin-left: 4px; color: #8b95a1; font-size: 10px; font-weight: 500; }
+.report-question { display: grid; gap: 9px; margin: 17px 0; }
+.report-question > strong,.report-select > span { color: #333d4b; font-size: 13px; }
+.report-question > strong b,.report-select > span b { color: #f04452; }
+.report-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.report-chips button { min-height: 36px; padding: 0 12px; border: 1px solid #e5e8eb; border-radius: 999px; background: #fff; color: #6b7684; font-size: 12px; font-weight: 650; }
+.report-chips button.active { border-color: #3182f6; background: #eaf3ff; color: #1b64da; }
+.report-select { display: grid; gap: 8px; margin: 17px 0; }
+.report-select select,.report-select input { width: 100%; height: 48px; padding: 0 12px; border: 1px solid #e5e8eb; border-radius: 13px; background: #fff; color: #333d4b; font: inherit; font-size: 13px; }
+.report-select small { color: #8b95a1; font-size: 10px; }
+.report-two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.report-two-columns .report-select { margin: 0 0 17px; }
+.report-flags { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.report-flags label { display: flex; align-items: center; gap: 7px; padding: 12px; border-radius: 13px; background: #f7f8fa; color: #4e5968; font-size: 11px; }
+.report-flags input { width: 17px; height: 17px; accent-color: #3182f6; }
 .report-consent { display: grid; grid-template-columns: 20px 1fr; gap: 9px; margin: 16px 0; color: #6b7684; font-size: 11px; line-height: 1.5; }
 .report-consent input { width: 18px; height: 18px; accent-color: #3182f6; }
 .report-error { padding: 11px; border-radius: 11px; background: #fff0f1; color: #d22030; font-size: 12px; }

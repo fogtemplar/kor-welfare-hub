@@ -20,6 +20,22 @@ type WelfareReport = {
   recommendations: Array<{ policyId: string; title: string; agency: string; reason: string; nextStep: string; url: string }>;
 };
 
+type ReportProfile = {
+  household: string;
+  housing: string;
+  statuses: string[];
+  incomePct: string;
+  childrenCount: string;
+  youngestChildAge: string;
+  pregnant: boolean;
+  hasDisability: boolean;
+};
+
+const EMPTY_REPORT_PROFILE: ReportProfile = { household: "", housing: "", statuses: [], incomePct: "", childrenCount: "0", youngestChildAge: "", pregnant: false, hasDisability: false };
+const HOUSEHOLDS = [["single", "1인 가구"], ["couple", "부부"], ["newlywed", "신혼"], ["general", "일반 가구"], ["multi-child", "다자녀"], ["single-parent", "한부모"], ["multicultural", "다문화"]];
+const HOUSINGS = [["own", "자가"], ["jeonse", "전세"], ["monthly", "월세"], ["with-family", "가족과 거주"], ["homeless", "주거 불안정"]];
+const STATUSES = [["student", "대학(원)생"], ["jobseeker", "구직 중"], ["employed", "재직 중"], ["self-employed", "자영업·프리랜서"], ["preparing-startup", "창업 준비"], ["farmer", "농어업"], ["career-break", "경력단절·휴직"], ["retired", "은퇴"]];
+
 type TossProfile = {
   userKey: number;
   name?: string | null;
@@ -143,6 +159,7 @@ function App() {
   const [report, setReport] = useState<WelfareReport | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [reportConsent, setReportConsent] = useState(false);
+  const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/toss/session`, { credentials: "include" })
@@ -415,8 +432,8 @@ function App() {
   };
 
   const requestPaidReport = async () => {
-    if (!reportConsent || reportDetails.trim().length < 10) {
-      setReportError("현재 상황을 10자 이상 적고 정보 처리에 동의해 주세요.");
+    if (!reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct) {
+      setReportError("가구 유형, 주거 상황, 소득 구간을 선택하고 정보 처리에 동의해 주세요.");
       return;
     }
     setReportLoading(true);
@@ -452,6 +469,7 @@ function App() {
                 orderId,
                 details: reportDetails.trim(),
                 filters: { age, region, category },
+                profile: reportProfile,
                 tossData: consentedData ? {
                   gender: consentedData.USER_GENDER,
                   nationality: consentedData.USER_NATIONALITY,
@@ -672,11 +690,17 @@ function App() {
               </div>
             ) : (
               <>
-                <p className="report-intro">토스에서 불러온 나이·지역 조건과 아래 내용을 함께 분석해요. 이름과 연락처는 리포트 생성에 보내지 않아요.</p>
-                <label className="report-field"><span>현재 상황</span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 서울 거주 29세, 1인 가구, 월 소득 220만원, 전세 보증금과 취업 지원 혜택을 찾고 있어요." /><small>{reportDetails.length}/700</small></label>
+                <p className="report-intro">정확한 추천을 위해 몇 가지만 알려주세요. 이름·전화번호·상세주소는 AI에 보내지 않아요.</p>
+                <ReportChoice title="가구 유형" required options={HOUSEHOLDS} value={reportProfile.household} onChange={(value) => setReportProfile((current) => ({ ...current, household: value }))} />
+                <ReportChoice title="주거 상황" required options={HOUSINGS} value={reportProfile.housing} onChange={(value) => setReportProfile((current) => ({ ...current, housing: value }))} />
+                <div className="report-question"><strong>경제활동 상태 <small>복수 선택</small></strong><div className="report-chips">{STATUSES.map(([value, label]) => <button type="button" key={value} className={reportProfile.statuses.includes(value) ? "active" : ""} onClick={() => setReportProfile((current) => ({ ...current, statuses: current.statuses.includes(value) ? current.statuses.filter((item) => item !== value) : [...current.statuses, value] }))}>{label}</button>)}</div></div>
+                <label className="report-select"><span>가구 기준 중위소득 구간 <b>*</b></span><select value={reportProfile.incomePct} onChange={(event) => setReportProfile((current) => ({ ...current, incomePct: event.target.value }))}><option value="">선택해 주세요</option><option value="50">50% 이하</option><option value="75">75% 이하</option><option value="100">100% 이하</option><option value="150">150% 이하</option><option value="250">250% 이하</option><option value="999">해당 없음·모름</option></select><small>정확하지 않아도 가장 가까운 구간을 선택하세요.</small></label>
+                <div className="report-two-columns"><label className="report-select"><span>자녀 수</span><select value={reportProfile.childrenCount} onChange={(event) => setReportProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option key={count} value={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label className="report-select"><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={reportProfile.childrenCount === "0"} value={reportProfile.youngestChildAge} onChange={(event) => setReportProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label></div>
+                <div className="report-flags"><label><input type="checkbox" checked={reportProfile.pregnant} onChange={(event) => setReportProfile((current) => ({ ...current, pregnant: event.target.checked }))} /> 임신 중이에요</label><label><input type="checkbox" checked={reportProfile.hasDisability} onChange={(event) => setReportProfile((current) => ({ ...current, hasDisability: event.target.checked }))} /> 등록 장애인이에요</label></div>
+                <label className="report-field"><span>가장 필요한 지원 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 전세 보증금과 취업 준비 비용 지원을 우선 확인하고 싶어요." /><small>{reportDetails.length}/700</small></label>
                 <label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>리포트 생성을 위해 입력한 정보가 OpenAI API로 전송되는 것에 동의해요. 생성 후 별도로 저장하지 않아요.</span></label>
                 {reportError && <p className="report-error" role="alert">{reportError}</p>}
-                <button className="tds-primary-button" disabled={reportLoading || !reportConsent || reportDetails.trim().length < 10} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 리포트 받기"}</button>
+                <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 리포트 받기"}</button>
                 <p className="payment-note">단건 결제 상품이며, 버튼을 누르면 토스 결제 화면이 열려요.</p>
               </>
             )}
@@ -737,6 +761,10 @@ function DetailBlock({ title, text }: { title: string; text: string }) {
 
 function ProfileItem({ label, value }: { label: string; value: string }) {
   return <div><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function ReportChoice({ title, required, options, value, onChange }: { title: string; required?: boolean; options: string[][]; value: string; onChange: (value: string) => void }) {
+  return <div className="report-question"><strong>{title}{required && <b> *</b>}</strong><div className="report-chips">{options.map(([key, label]) => <button type="button" key={key} className={value === key ? "active" : ""} onClick={() => onChange(key)}>{label}</button>)}</div></div>;
 }
 
 function formatUpdatedAt(value: string | null): string {
