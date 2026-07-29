@@ -56,11 +56,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .data-freshness { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -5px 0 14px; color: #8b95a1; font-size: 10px; line-height: 1.45; }
 .data-freshness span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .data-freshness span:last-child { flex: none; }
-.paid-report-card { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin: 0 0 18px; padding: 18px; border-radius: 20px; background: linear-gradient(135deg,#191f28,#333d4b); color: #fff; box-shadow: 0 9px 24px rgba(25,31,40,.16); }
+.paid-report-card { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin: 18px 0 4px; padding: 20px 18px; border-radius: 22px; background: linear-gradient(140deg,#1261d8 0%,#3182f6 58%,#6ca7ff 100%); color: #fff; box-shadow: 0 12px 28px rgba(49,130,246,.28); position: relative; overflow: hidden; }
+.paid-report-card::after { content: "✦"; position: absolute; right: 82px; top: -27px; color: rgba(255,255,255,.11); font-size: 92px; transform: rotate(12deg); }
 .paid-report-card span { color: #8ec5ff; font-size: 11px; font-weight: 750; }
-.paid-report-card h2 { margin: 5px 0 5px; font-size: 18px; }
-.paid-report-card p { margin: 0; color: #d1d6db; font-size: 11px; line-height: 1.5; }
+.paid-report-card h2 { margin: 9px 0 6px; font-size: 19px; line-height: 1.35; letter-spacing: -.45px; }
+.paid-report-card p { margin: 0; max-width: 290px; color: rgba(255,255,255,.82); font-size: 11px; line-height: 1.5; }
 .paid-report-card button { min-width: 105px; padding: 11px 12px; border: 0; border-radius: 13px; background: #fff; color: #191f28; font-size: 12px; font-weight: 750; }
+.report-card-copy { position: relative; z-index: 1; }
+.paid-report-card .report-launch-badge { display: inline-flex; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,.18); color: #fff; font-size: 10px; }
 .paid-report-card button b { margin-left: 3px; color: #8b95a1; font-size: 16px; }
 .paid-report-card .report-price-button { display: grid; grid-template-columns: 1fr auto; align-items: center; text-align: left; }
 .paid-report-card .report-price-button small { grid-column: 1; color: #8b95a1; font-size: 10px; font-weight: 600; text-decoration: line-through; }
@@ -157,6 +160,16 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-result > button small { color: #3182f6; font-size: 10px; }
 .report-result h4 { margin-bottom: 7px; }
 .report-result ol { margin-top: 0; padding-left: 21px; color: #4e5968; font-size: 12px; line-height: 1.7; }
+.report-nudge-backdrop { z-index: 120; }
+.report-nudge-sheet { text-align: center; }
+.nudge-badge { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: #eaf3ff; color: #1b64da; font-size: 11px; font-weight: 750; }
+.report-nudge-sheet > h2 { margin: 14px 0 9px; font-size: 24px; }
+.report-nudge-sheet > h2 em { color: #3182f6; font-style: normal; }
+.report-nudge-sheet > p { margin: 0 auto; max-width: 390px; color: #6b7684; font-size: 13px; line-height: 1.6; }
+.nudge-price { display: flex; justify-content: center; align-items: baseline; gap: 9px; margin: 20px 0 11px; }
+.nudge-price s { color: #8b95a1; font-size: 12px; }
+.nudge-price strong { color: #f04452; font-size: 18px; }
+.nudge-later { width: 100%; min-height: 48px; border: 0; background: transparent; color: #6b7684; font-size: 13px; font-weight: 650; }
 
 @media (max-width: 374px) {
   .app-shell { padding-left: 14px; padding-right: 14px; }

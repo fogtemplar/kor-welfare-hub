@@ -160,6 +160,7 @@ function App() {
   const [reportDetails, setReportDetails] = useState("");
   const [reportConsent, setReportConsent] = useState(false);
   const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
+  const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/toss/session`, { credentials: "include" })
@@ -268,6 +269,14 @@ function App() {
 
     return () => controller.abort();
   }, [age, category, debouncedQuery, page, region, retryNonce]);
+
+  useEffect(() => {
+    if (!consentedData || loading || count === 0 || accountOpen || reportOpen) return;
+    const key = "kor-welfare-hub:report-nudge:v1";
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "shown");
+    setReportNudgeOpen(true);
+  }, [accountOpen, consentedData, count, loading, reportOpen]);
 
   useEffect(() => {
     if (!savedOnly) return;
@@ -538,6 +547,11 @@ function App() {
 
       {!online && <div className="network-banner" role="status">오프라인 상태예요. 연결되면 다시 시도해 주세요.</div>}
 
+      <section className="paid-report-card featured">
+        <div className="report-card-copy"><span className="report-launch-badge">출시 기념 50% 할인</span><h2>받을 수 있는 혜택,<br />AI가 순서대로 정리해요</h2><p>가구·소득·직업까지 분석한 신청 우선순위와 준비서류를 확인하세요.</p></div>
+        <button className="report-price-button" onClick={() => setReportOpen(true)}><small>1,990원</small><span>990원에 보기</span><b>›</b></button>
+      </section>
+
       <section className="search-panel" aria-label="혜택 검색">
         <label className="search-box">
           <span className="search-icon" aria-hidden="true">⌕</span>
@@ -575,11 +589,6 @@ function App() {
         <span>출처: 복지로 · 정부24 · 온통청년 · K-Startup</span>
         <span>최종 갱신 {formatUpdatedAt(generatedAt || lastUpdated)}</span>
       </div>
-
-      <section className="paid-report-card">
-        <div><span>AI 맞춤 분석</span><h2>나만의 복지 리포트</h2><p>가구·소득·직업 상황까지 반영해 신청 우선순위와 다음 행동을 정리해 드려요.</p></div>
-        <button className="report-price-button" onClick={() => setReportOpen(true)}><small>1,990원</small><span>출시가 990원</span><b>›</b></button>
-      </section>
 
       {error && (
         <div className="notice error" role="alert">
@@ -671,6 +680,19 @@ function App() {
             <button className="apply-button" disabled={authLoading} onClick={() => void handleUserData()}>내 정보 다시 불러오기</button>
             {consentedData && <button className="reset-button" onClick={resetPersonalization}>맞춤 조건 초기화</button>}
             {profile && <button className="logout-button" disabled={authLoading} onClick={() => void handleLogout()}>로그아웃 및 연결 끊기</button>}
+          </section>
+        </div>
+      )}
+      {reportNudgeOpen && (
+        <div className="modal-backdrop report-nudge-backdrop" role="presentation" onClick={() => setReportNudgeOpen(false)}>
+          <section className="detail-sheet report-nudge-sheet" role="dialog" aria-modal="true" aria-label="맞춤 복지 리포트 안내" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-handle" />
+            <span className="nudge-badge">무료 조회 완료</span>
+            <h2>조건상 확인해 볼 혜택이<br /><em>{count.toLocaleString()}개</em> 있어요</h2>
+            <p>AI가 실제 신청 가능성을 한 번 더 분석하고, 놓치기 쉬운 혜택부터 순서대로 정리해 드릴게요.</p>
+            <div className="nudge-price"><s>1,990원</s><strong>출시 기념 990원</strong></div>
+            <button className="tds-primary-button" onClick={() => { setReportNudgeOpen(false); setReportOpen(true); }}>전체 맞춤 리포트 보기</button>
+            <button className="nudge-later" onClick={() => setReportNudgeOpen(false)}>무료 조회 결과 계속 보기</button>
           </section>
         </div>
       )}
