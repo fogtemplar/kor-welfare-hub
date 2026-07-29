@@ -113,6 +113,9 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .detail-block { padding: 16px 0; border-top: 1px solid #f2f4f6; }
 .detail-block h3 { margin: 0 0 7px; color: #333d4b; font-size: 14px; }
 .detail-block p { margin: 0; color: #6b7684; font-size: 13px; line-height: 1.65; white-space: pre-line; }
+.detail-next-button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 52px; margin: 9px 0 4px; padding: 0 16px; border: 0; border-radius: 15px; background: #eaf3ff; color: #1b64da; font-size: 14px; font-weight: 750; text-align: left; }
+.detail-next-button b { font-size: 21px; font-weight: 500; }
+.detail-next-button:active { transform: scale(.985); }
 .external-note { margin: 10px 0 0; color: #8b95a1; font-size: 11px; text-align: center; }
 .source-panel { display: grid; gap: 4px; margin-top: 8px; padding: 14px 15px; border-radius: 14px; background: #f7f8fa; }
 .source-panel span, .source-panel small { color: #8b95a1; font-size: 11px; }

@@ -144,6 +144,7 @@ function App() {
   const [retryNonce, setRetryNonce] = useState(0);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [selected, setSelected] = useState<Policy | null>(null);
+  const [detailStep, setDetailStep] = useState(1);
   const [legal, setLegal] = useState<"terms" | "privacy" | null>(null);
   const [savedOnly, setSavedOnly] = useState(false);
   const [saved, setSaved] = useState<Set<string>>(new Set());
@@ -375,6 +376,12 @@ function App() {
       track(next.has(id) ? "welfare_save" : "welfare_unsave", { policy_id: id });
       return next;
     });
+  };
+
+  const openPolicy = (policy: Policy) => {
+    setDetailStep(1);
+    setSelected(policy);
+    track("welfare_detail_view", { policy_id: policy.id });
   };
 
   const checklistItems = (policy: Policy) => [
@@ -699,7 +706,7 @@ function App() {
                   ♥
                 </button>
               </div>
-              <button className="card-main" onClick={() => setSelected(policy)}>
+              <button className="card-main" onClick={() => openPolicy(policy)}>
                 <h2>{policy.title}</h2>
                 <p>{policy.summary || policy.benefit}</p>
                 <div className="card-meta"><small>{policy.agency}</small><span aria-hidden="true">›</span></div>
@@ -732,22 +739,27 @@ function App() {
             <span className="detail-agency">{selected.agency}</span>
             <h2>{selected.title}</h2>
             <DetailBlock title="지원 내용" text={selected.benefit || selected.summary} />
-            <DetailBlock title="신청 대상" text={selected.eligibility} />
-            <DetailBlock title="신청 방법" text={selected.howTo} />
-            <div className="application-checklist">
-              <h3>신청 체크리스트</h3>
-              <p>확인한 항목은 이 기기에 저장돼요.</p>
-              {checklistItems(selected).map((item, index) => <label key={item}><input type="checkbox" checked={Boolean(checklists[selected.id]?.[index])} onChange={() => toggleChecklist(selected.id, index)} /><span>{item}</span></label>)}
-            </div>
-            <div className="source-panel">
-              <span>정보 출처</span>
-              <strong>{SOURCE_LABELS[selected.source || ""] || selected.agency}</strong>
-              <small>원문 갱신일 {selected.updatedAt || "확인 필요"}</small>
-            </div>
-            <p className="external-note">공공기관의 공식 페이지가 외부 브라우저에서 열려요.</p>
-            <div className="tds-cta">
-              <button className="tds-primary-button" onClick={() => setExternalTarget(selected.url)}>공식 기관 페이지 열기</button>
-            </div>
+            {detailStep === 1 && <button className="detail-next-button" onClick={() => setDetailStep(2)}>내가 신청 대상인지 보기 <b>›</b></button>}
+            {detailStep >= 2 && <DetailBlock title="신청 대상" text={selected.eligibility} />}
+            {detailStep === 2 && <button className="detail-next-button" onClick={() => setDetailStep(3)}>신청 방법 확인하기 <b>›</b></button>}
+            {detailStep >= 3 && <DetailBlock title="신청 방법" text={selected.howTo} />}
+            {detailStep === 3 && <button className="detail-next-button" onClick={() => setDetailStep(4)}>신청 준비 시작하기 <b>›</b></button>}
+            {detailStep >= 4 && <>
+              <div className="application-checklist">
+                <h3>신청 체크리스트</h3>
+                <p>확인한 항목은 이 기기에 저장돼요.</p>
+                {checklistItems(selected).map((item, index) => <label key={item}><input type="checkbox" checked={Boolean(checklists[selected.id]?.[index])} onChange={() => toggleChecklist(selected.id, index)} /><span>{item}</span></label>)}
+              </div>
+              <div className="source-panel">
+                <span>정보 출처</span>
+                <strong>{SOURCE_LABELS[selected.source || ""] || selected.agency}</strong>
+                <small>원문 갱신일 {selected.updatedAt || "확인 필요"}</small>
+              </div>
+              <p className="external-note">공공기관의 공식 페이지가 외부 브라우저에서 열려요.</p>
+              <div className="tds-cta">
+                <button className="tds-primary-button" onClick={() => setExternalTarget(selected.url)}>공식 기관 페이지 열기</button>
+              </div>
+            </>}
           </section>
         </div>
       )}
