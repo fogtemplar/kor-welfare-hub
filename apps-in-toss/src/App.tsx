@@ -205,6 +205,7 @@ function App() {
   const [reportConsent, setReportConsent] = useState(false);
   const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
   const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
+  const [reportNudgePending, setReportNudgePending] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [storedReport, setStoredReport] = useState<StoredReport | null>(null);
@@ -357,12 +358,16 @@ function App() {
   }, [age, category, consentedData, debouncedQuery, page, region, retryNonce]);
 
   useEffect(() => {
-    if (!consentedData || loading || count === 0 || accountOpen || reportOpen) return;
+    if ((!consentedData && !reportNudgePending) || onboardingOpen || loading || count === 0 || accountOpen || reportOpen) return;
     const key = "kor-welfare-hub:report-nudge:v1";
-    if (sessionStorage.getItem(key)) return;
+    if (sessionStorage.getItem(key)) {
+      setReportNudgePending(false);
+      return;
+    }
     sessionStorage.setItem(key, "shown");
+    setReportNudgePending(false);
     setReportNudgeOpen(true);
-  }, [accountOpen, consentedData, count, loading, reportOpen]);
+  }, [accountOpen, consentedData, count, loading, onboardingOpen, reportNudgePending, reportOpen]);
 
   useEffect(() => {
     if (!savedOnly) return;
@@ -630,19 +635,23 @@ function App() {
     });
   };
 
-  const finishOnboarding = () => {
+  const finishOnboarding = (showReportNudge = true) => {
     localStorage.setItem(ONBOARDING_KEY, "completed");
     localStorage.setItem(PROFILE_KEY, JSON.stringify(reportProfile));
     const preferredCategory = reportProfile.interests.find((item) => categories.some(([key]) => key === item));
     if (preferredCategory) setCategory(preferredCategory);
     setPage(0);
+    if (showReportNudge) {
+      setLoading(true);
+      setReportNudgePending(true);
+    }
     setOnboardingOpen(false);
     track("welfare_onboarding_complete", { interests: reportProfile.interests.length });
   };
 
   return (
     <main className="app-shell">
-      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} total={total} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={setOnboardingStep} onDone={finishOnboarding} onSkip={finishOnboarding} />}
+      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} total={total} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={setOnboardingStep} onDone={() => finishOnboarding(true)} onSkip={() => finishOnboarding(false)} />}
       <header className="hero">
         <div className="account-row">
           <div className="brand-lockup">
@@ -818,8 +827,8 @@ function App() {
             <span className="nudge-badge">무료 조회 완료</span>
             <h2>조건상 확인해 볼 혜택이<br /><em>{count.toLocaleString()}개</em> 있어요</h2>
             <p>AI가 실제 신청 가능성을 한 번 더 분석하고, 놓치기 쉬운 혜택부터 순서대로 정리해 드릴게요.</p>
-            <div className="nudge-price"><strong>출시 기념가 990원</strong></div>
-            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReport(storedReport?.report || null); setReportOpen(true); }}>전체 맞춤 리포트 보기</button>
+            <div className="nudge-price"><s>1,990원</s><strong>출시 기념 990원</strong></div>
+            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReport(storedReport?.report || null); setReportOpen(true); }}>AI 상세 분석 990원에 보기</button>
             <button className="nudge-later" onClick={() => setReportNudgeOpen(false)}>무료 조회 결과 계속 보기</button>
           </section>
         </div>
