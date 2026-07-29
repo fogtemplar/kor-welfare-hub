@@ -578,7 +578,7 @@ function App() {
 
       <section className="paid-report-card">
         <div><span>AI 맞춤 분석</span><h2>나만의 복지 리포트</h2><p>가구·소득·직업 상황까지 반영해 신청 우선순위와 다음 행동을 정리해 드려요.</p></div>
-        <button onClick={() => setReportOpen(true)}>1회 990원 <b>›</b></button>
+        <button className="report-price-button" onClick={() => setReportOpen(true)}><small>1,990원</small><span>출시가 990원</span><b>›</b></button>
       </section>
 
       {error && (
@@ -700,8 +700,9 @@ function App() {
                 <label className="report-field"><span>가장 필요한 지원 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 전세 보증금과 취업 준비 비용 지원을 우선 확인하고 싶어요." /><small>{reportDetails.length}/700</small></label>
                 <label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>리포트 생성을 위해 입력한 정보가 OpenAI API로 전송되는 것에 동의해요. 생성 후 별도로 저장하지 않아요.</span></label>
                 {reportError && <p className="report-error" role="alert">{reportError}</p>}
-                <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 리포트 받기"}</button>
-                <p className="payment-note">단건 결제 상품이며, 버튼을 누르면 토스 결제 화면이 열려요.</p>
+                <div className="report-price-summary"><span>정상가 <s>1,990원</s></span><strong>출시 기념가 990원</strong></div>
+                <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 전체 리포트 보기"}</button>
+                <p className="payment-note">50% 출시 할인 · 실제 결제금액 990원 · 단건 결제 상품이에요.</p>
               </>
             )}
           </section>
@@ -744,7 +745,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
             <DetailBlock title="서비스 성격" text="나라가쏜다는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
             <DetailBlock title="정보 확인" text="공공기관의 변경 사항이 반영되기까지 시차가 있을 수 있어요. 신청 조건, 금액, 마감일은 반드시 공식 기관 페이지에서 최종 확인해 주세요." />
             <DetailBlock title="외부 페이지" text="공식 기관 페이지를 열면 해당 기관의 이용약관과 개인정보처리방침이 적용돼요." />
-            <DetailBlock title="유료 서비스" text="맞춤 복지 리포트는 1회 990원의 소비성 인앱결제 상품이에요. 결제 완료 후 리포트 생성에 실패하면 상품 지급이 완료되지 않도록 처리하며, 결제·환불은 앱 마켓 및 앱인토스 정책을 따라요." />
+            <DetailBlock title="유료 서비스" text="맞춤 복지 리포트는 정상가 1,990원, 출시 기념가 990원의 1회 소비성 인앱결제 상품이에요. 결제 완료 후 리포트 생성에 실패하면 상품 지급이 완료되지 않도록 처리하며, 결제·환불은 앱 마켓 및 앱인토스 정책을 따라요." />
             <DetailBlock title="문의" text="서비스 문의: fogtemplar@gmail.com" />
           </>
         )}
