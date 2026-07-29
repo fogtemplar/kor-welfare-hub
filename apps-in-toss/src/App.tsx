@@ -478,7 +478,7 @@ function App() {
     }
   };
 
-  const handleTossLogin = async () => {
+  const handleTossLogin = async (openAccount = true) => {
     setAuthLoading(true);
     setAuthError("");
     try {
@@ -492,7 +492,7 @@ function App() {
       const data = await response.json() as { profile?: TossProfile; error?: string };
       if (!response.ok || !data.profile) throw new Error(data.error || "LOGIN_FAILED");
       setProfile(data.profile);
-      setAccountOpen(true);
+      if (openAccount) setAccountOpen(true);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message.toLowerCase() : "";
       if (message.includes("not_configured")) {
@@ -509,7 +509,7 @@ function App() {
     }
   };
 
-  const handleUserData = async () => {
+  const handleUserData = async (openAccount = true) => {
     if (!USER_DATA_KEY) {
       setAuthError("앱인토스 콘솔에서 유저정보 불러오기를 먼저 등록해 주세요.");
       return;
@@ -532,7 +532,7 @@ function App() {
         if (matchedRegion) setRegion(matchedRegion);
       }
       setPage(0);
-      setAccountOpen(true);
+      if (openAccount) setAccountOpen(true);
     } catch (reason) {
       const message = reason instanceof Error ? reason.message.toLowerCase() : "";
       if (message.includes("declin") || message.includes("cancel") || message.includes("denied")) {
@@ -642,7 +642,7 @@ function App() {
 
   return (
     <main className="app-shell">
-      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} profile={reportProfile} setProfile={setReportProfile} onStep={setOnboardingStep} onDone={finishOnboarding} onSkip={finishOnboarding} />}
+      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={setOnboardingStep} onDone={finishOnboarding} onSkip={finishOnboarding} />}
       <header className="hero">
         <div className="account-row">
           <div className="brand-lockup">
@@ -901,8 +901,10 @@ function DeadlineBadge({ policy }: { policy: Policy }) {
   return <span className="deadline-badge">~ {deadline.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>;
 }
 
-function FirstVisitOnboarding({ step, profile, setProfile, onStep, onDone, onSkip }: { step: number; profile: ReportProfile; setProfile: Dispatch<SetStateAction<ReportProfile>>; onStep: (step: number) => void; onDone: () => void; onSkip: () => void }) {
+function FirstVisitOnboarding({ step, profile, tossProfile, consentedData, authLoading, authError, setProfile, onLogin, onUserData, onStep, onDone, onSkip }: { step: number; profile: ReportProfile; tossProfile: TossProfile | null; consentedData: ConsentedData | null; authLoading: boolean; authError: string; setProfile: Dispatch<SetStateAction<ReportProfile>>; onLogin: () => void; onUserData: () => void; onStep: (step: number) => void; onDone: () => void; onSkip: () => void }) {
   const steps = [
+    { title: "토스로 간편하게 시작해요", description: "로그인하면 내 정보를 안전하게 연결하고 맞춤 조건을 이어서 저장할 수 있어요." },
+    { title: "내 기본정보를 불러올까요?", description: "동의한 정보로 나이와 지역을 자동 설정해 더 정확한 혜택을 찾아요." },
     { title: "가구 유형을 알려주세요", description: "함께 사는 가족 구성에 따라 받을 수 있는 혜택이 달라져요." },
     { title: "현재 주거 상황은 어떤가요?", description: "월세·전세·자가 여부를 주거지원 검색에 활용해요." },
     { title: "현재 경제활동 상태를 알려주세요", description: "여러 상황에 해당하면 모두 선택해 주세요." },
@@ -911,8 +913,9 @@ function FirstVisitOnboarding({ step, profile, setProfile, onStep, onDone, onSki
     { title: "특별히 어려운 상황이 있나요?", description: "해당하는 항목을 모두 선택하거나 건너뛸 수 있어요." },
     { title: "어떤 지원을 가장 찾고 싶나요?", description: "관심 분야를 중심으로 첫 화면과 AI 분석을 맞춰드려요." },
   ];
+  const questionStep = step - 2;
   const toggleArray = (field: "statuses" | "supportNeeds" | "interests", value: string) => setProfile((current) => ({ ...current, [field]: current[field].includes(value) ? current[field].filter((item) => item !== value) : [...current[field], value] }));
-  const canContinue = step === 0 ? Boolean(profile.household) : step === 1 ? Boolean(profile.housing) : step === 2 ? profile.statuses.length > 0 : step === 3 ? Boolean(profile.incomePct) : step === 6 ? profile.interests.length > 0 : true;
+  const canContinue = step === 0 ? Boolean(tossProfile) : step === 1 ? Boolean(consentedData) : questionStep === 0 ? Boolean(profile.household) : questionStep === 1 ? Boolean(profile.housing) : questionStep === 2 ? profile.statuses.length > 0 : questionStep === 3 ? Boolean(profile.incomePct) : questionStep === 6 ? profile.interests.length > 0 : true;
   const next = () => step === steps.length - 1 ? onDone() : onStep(step + 1);
 
   return <div className="first-onboarding" role="dialog" aria-modal="true" aria-label="맞춤 혜택 설정">
@@ -921,13 +924,16 @@ function FirstVisitOnboarding({ step, profile, setProfile, onStep, onDone, onSki
     <section className="onboarding-content">
       <span className="onboarding-eyebrow">내 조건에 맞는 숨은 혜택 찾기</span>
       <h1>{steps[step].title}</h1><p>{steps[step].description}</p>
-      {step === 0 && <OnboardingChoices options={HOUSEHOLDS} values={[profile.household]} onSelect={(value) => setProfile((current) => ({ ...current, household: value }))} />}
-      {step === 1 && <OnboardingChoices options={HOUSINGS} values={[profile.housing]} onSelect={(value) => setProfile((current) => ({ ...current, housing: value }))} />}
-      {step === 2 && <OnboardingChoices options={STATUSES} values={profile.statuses} onSelect={(value) => toggleArray("statuses", value)} multiple />}
-      {step === 3 && <OnboardingChoices options={[["50", "중위소득 50% 이하"], ["75", "중위소득 75% 이하"], ["100", "중위소득 100% 이하"], ["150", "중위소득 150% 이하"], ["250", "중위소득 250% 이하"], ["999", "잘 모르겠어요"]]} values={[profile.incomePct]} onSelect={(value) => setProfile((current) => ({ ...current, incomePct: value }))} />}
-      {step === 4 && <div className="onboarding-family"><label><span>자녀 수</span><select value={profile.childrenCount} onChange={(event) => setProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option value={count} key={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={profile.childrenCount === "0"} value={profile.youngestChildAge} onChange={(event) => setProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label><button className={profile.pregnant ? "selected" : ""} onClick={() => setProfile((current) => ({ ...current, pregnant: !current.pregnant }))}>임신 중이에요</button><button className={profile.hasDisability ? "selected" : ""} onClick={() => setProfile((current) => ({ ...current, hasDisability: !current.hasDisability }))}>등록 장애인이에요</button></div>}
-      {step === 5 && <OnboardingChoices options={SUPPORT_NEEDS} values={profile.supportNeeds} onSelect={(value) => toggleArray("supportNeeds", value)} multiple />}
-      {step === 6 && <OnboardingChoices options={INTERESTS} values={profile.interests} onSelect={(value) => toggleArray("interests", value)} multiple />}
+      {step === 0 && <div className="onboarding-auth-card"><div className="onboarding-auth-icon">T</div><b>{tossProfile ? `${tossProfile.name || "토스 사용자"}님, 로그인됐어요` : "토스 로그인"}</b><p>복잡한 회원가입 없이 토스에서 안전하게 확인해요.</p><button disabled={authLoading || Boolean(tossProfile)} onClick={onLogin}>{tossProfile ? "로그인 완료" : authLoading ? "연결 중…" : "토스로 로그인하기"}</button><small>로그인 정보는 암호화해 전송하며, AI에 이름·전화번호·이메일을 보내지 않아요.</small></div>}
+      {step === 1 && <div className="onboarding-auth-card user-data"><div className="onboarding-data-list"><span><b>생년월일</b><small>나이 조건 자동 설정</small></span><span><b>주소</b><small>거주지역 혜택 자동 설정</small></span><span><b>성별·내외국인</b><small>관련 자격 분석에 활용</small></span></div><button disabled={authLoading || Boolean(consentedData)} onClick={onUserData}>{consentedData ? "기본정보 연동 완료" : authLoading ? "불러오는 중…" : "동의하고 기본정보 불러오기"}</button><small>이름·전화번호·상세주소는 AI 분석에 전송하지 않아요.</small></div>}
+      {authError && step < 2 && <p className="onboarding-auth-error" role="alert">{authError}</p>}
+      {questionStep === 0 && <OnboardingChoices options={HOUSEHOLDS} values={[profile.household]} onSelect={(value) => setProfile((current) => ({ ...current, household: value }))} />}
+      {questionStep === 1 && <OnboardingChoices options={HOUSINGS} values={[profile.housing]} onSelect={(value) => setProfile((current) => ({ ...current, housing: value }))} />}
+      {questionStep === 2 && <OnboardingChoices options={STATUSES} values={profile.statuses} onSelect={(value) => toggleArray("statuses", value)} multiple />}
+      {questionStep === 3 && <OnboardingChoices options={[["50", "중위소득 50% 이하"], ["75", "중위소득 75% 이하"], ["100", "중위소득 100% 이하"], ["150", "중위소득 150% 이하"], ["250", "중위소득 250% 이하"], ["999", "잘 모르겠어요"]]} values={[profile.incomePct]} onSelect={(value) => setProfile((current) => ({ ...current, incomePct: value }))} />}
+      {questionStep === 4 && <div className="onboarding-family"><label><span>자녀 수</span><select value={profile.childrenCount} onChange={(event) => setProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option value={count} key={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={profile.childrenCount === "0"} value={profile.youngestChildAge} onChange={(event) => setProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label><button className={profile.pregnant ? "selected" : ""} onClick={() => setProfile((current) => ({ ...current, pregnant: !current.pregnant }))}>임신 중이에요</button><button className={profile.hasDisability ? "selected" : ""} onClick={() => setProfile((current) => ({ ...current, hasDisability: !current.hasDisability }))}>등록 장애인이에요</button></div>}
+      {questionStep === 5 && <OnboardingChoices options={SUPPORT_NEEDS} values={profile.supportNeeds} onSelect={(value) => toggleArray("supportNeeds", value)} multiple />}
+      {questionStep === 6 && <OnboardingChoices options={INTERESTS} values={profile.interests} onSelect={(value) => toggleArray("interests", value)} multiple />}
     </section>
     <div className="onboarding-bottom">
       <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd /></Suspense>
