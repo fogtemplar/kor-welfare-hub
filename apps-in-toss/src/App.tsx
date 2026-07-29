@@ -642,7 +642,7 @@ function App() {
 
   return (
     <main className="app-shell">
-      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={setOnboardingStep} onDone={finishOnboarding} onSkip={finishOnboarding} />}
+      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} total={total} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={setOnboardingStep} onDone={finishOnboarding} onSkip={finishOnboarding} />}
       <header className="hero">
         <div className="account-row">
           <div className="brand-lockup">
@@ -901,7 +901,7 @@ function DeadlineBadge({ policy }: { policy: Policy }) {
   return <span className="deadline-badge">~ {deadline.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>;
 }
 
-function FirstVisitOnboarding({ step, profile, tossProfile, consentedData, authLoading, authError, setProfile, onLogin, onUserData, onStep, onDone, onSkip }: { step: number; profile: ReportProfile; tossProfile: TossProfile | null; consentedData: ConsentedData | null; authLoading: boolean; authError: string; setProfile: Dispatch<SetStateAction<ReportProfile>>; onLogin: () => void; onUserData: () => void; onStep: (step: number) => void; onDone: () => void; onSkip: () => void }) {
+function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData, authLoading, authError, setProfile, onLogin, onUserData, onStep, onDone, onSkip }: { step: number; total: number; profile: ReportProfile; tossProfile: TossProfile | null; consentedData: ConsentedData | null; authLoading: boolean; authError: string; setProfile: Dispatch<SetStateAction<ReportProfile>>; onLogin: () => void; onUserData: () => void; onStep: (step: number) => void; onDone: () => void; onSkip: () => void }) {
   const steps = [
     { title: "토스로 간편하게 시작해요", description: "로그인하면 내 정보를 안전하게 연결하고 맞춤 조건을 이어서 저장할 수 있어요." },
     { title: "내 기본정보를 불러올까요?", description: "동의한 정보로 나이와 지역을 자동 설정해 더 정확한 혜택을 찾아요." },
@@ -922,8 +922,7 @@ function FirstVisitOnboarding({ step, profile, tossProfile, consentedData, authL
     <div className="onboarding-top"><button disabled={step === 0} onClick={() => onStep(step - 1)} aria-label="이전">‹</button><div><span>{step + 1}</span> / {steps.length}</div><button onClick={onSkip}>건너뛰기</button></div>
     <div className="onboarding-progress"><i style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
     <section className="onboarding-content">
-      <span className="onboarding-eyebrow">내 조건에 맞는 숨은 혜택 찾기</span>
-      <h1>{steps[step].title}</h1><p>{steps[step].description}</p>
+      {step === 0 ? <div className="onboarding-brand-intro"><img src={BRAND_ICON} alt="나라가쏜다 로고" /><strong>나라가쏜다</strong><h1><em>{total > 0 ? total.toLocaleString() : "20,000+"}가지</em> 숨은 복지 혜택,<br />잊고 있지 않나요?</h1><p>토스로 로그인하고 내 조건에 맞는 혜택을 빠르게 확인해 보세요.</p></div> : <><span className="onboarding-eyebrow">내 조건에 맞는 숨은 혜택 찾기</span><h1>{steps[step].title}</h1><p>{steps[step].description}</p></>}
       {step === 0 && <div className="onboarding-auth-card"><div className="onboarding-auth-icon">T</div><b>{tossProfile ? `${tossProfile.name || "토스 사용자"}님, 로그인됐어요` : "토스 로그인"}</b><p>복잡한 회원가입 없이 토스에서 안전하게 확인해요.</p><button disabled={authLoading || Boolean(tossProfile)} onClick={onLogin}>{tossProfile ? "로그인 완료" : authLoading ? "연결 중…" : "토스로 로그인하기"}</button><small>로그인 정보는 암호화해 전송하며, AI에 이름·전화번호·이메일을 보내지 않아요.</small></div>}
       {step === 1 && <div className="onboarding-auth-card user-data"><div className="onboarding-data-list"><span><b>생년월일</b><small>나이 조건 자동 설정</small></span><span><b>주소</b><small>거주지역 혜택 자동 설정</small></span><span><b>성별·내외국인</b><small>관련 자격 분석에 활용</small></span></div><button disabled={authLoading || Boolean(consentedData)} onClick={onUserData}>{consentedData ? "기본정보 연동 완료" : authLoading ? "불러오는 중…" : "동의하고 기본정보 불러오기"}</button><small>이름·전화번호·상세주소는 AI 분석에 전송하지 않아요.</small></div>}
       {authError && step < 2 && <p className="onboarding-auth-error" role="alert">{authError}</p>}
