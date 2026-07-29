@@ -8,7 +8,12 @@ export default function TossBannerAd() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!AD_GROUP_ID || !targetRef.current || !TossAds.initialize.isSupported() || !TossAds.attachBanner.isSupported()) return;
+    if (!AD_GROUP_ID || !targetRef.current) return;
+    try {
+      if (!TossAds.initialize.isSupported() || !TossAds.attachBanner.isSupported()) return;
+    } catch {
+      return;
+    }
 
     let destroySlot: (() => void) | undefined;
 

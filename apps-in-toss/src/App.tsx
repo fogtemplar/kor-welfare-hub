@@ -31,46 +31,6 @@ type WelfareReport = {
 
 type StoredReport = { orderId: string; createdAt: string; report: WelfareReport };
 
-const DEMO_REPORT: WelfareReport = {
-  title: "29세 서울 1인 가구 맞춤 혜택",
-  generatedFor: "월세 거주 · 구직 중 · 기준 중위소득 75% 이하 조건의 예시예요.",
-  executiveSummary: "현재 조건에서는 매달 지출을 줄이는 주거비 지원과 구직 기간의 소득·취업 지원을 먼저 확인하는 것이 좋아요.",
-  profileAnalysis: [
-    { label: "주거", assessment: "무주택 월세 거주자로 주거비 정책 우선 확인" },
-    { label: "경제활동", assessment: "구직자 대상 취업지원제도 확인 가능" },
-    { label: "소득", assessment: "저소득 청년 지원의 세부 기준 확인 필요" },
-  ],
-  priorityStrategy: "청년월세 지원을 먼저 확인하고 국민취업지원제도를 이어서 신청하는 순서가 효율적이에요.",
-  actionPlan: ["임대차계약서와 최근 월세 이체 내역을 준비해요.", "복지로에서 주거 지원 모의계산을 해요.", "고용24에서 국민취업지원제도 자가진단을 진행해요."],
-  generalCautions: ["정책 금액과 접수 기간은 변경될 수 있어요.", "최종 자격은 담당 기관의 심사를 통해 결정돼요."],
-  recommendations: [
-    {
-      policyId: "demo-housing", title: "청년월세 지원", agency: "국토교통부·지방자치단체", fit: "높음",
-      fitReason: "청년 연령대, 무주택, 월세 거주 조건이 주요 대상과 일치할 가능성이 높아요.",
-      benefitEstimate: "월세 일부를 정해진 한도와 기간 내에서 지원해요. 정확한 금액은 최신 공고 확인이 필요해요.",
-      eligibilityChecks: ["신청 연령", "무주택 및 별도 거주 여부", "본인·원가구 소득과 재산", "보증금·월세 기준"],
-      requiredDocuments: ["임대차계약서", "최근 월세 납부 내역", "주민등록등본", "가족관계증명서", "본인 명의 통장 사본"],
-      applicationSteps: ["복지로 모의계산", "서류 준비", "온라인 또는 행정복지센터 신청", "소득·재산 심사", "결과 확인"],
-      applicationLocation: "복지로 온라인 신청 또는 주소지 관할 행정복지센터",
-      deadline: "지역별 최신 모집 공고 확인 필요",
-      risks: ["유사한 월세 지원사업과 중복 제한 가능", "임대차계약자와 신청자가 다르면 추가 확인 필요"],
-      url: "https://www.bokjiro.go.kr",
-    },
-    {
-      policyId: "demo-employment", title: "국민취업지원제도", agency: "고용노동부", fit: "추가 확인",
-      fitReason: "현재 구직 중이므로 기본 방향은 일치하지만 가구소득·재산·취업 경험에 따라 참여 유형이 달라져요.",
-      benefitEstimate: "취업 상담·직업훈련·알선과 참여 유형에 따른 구직촉진수당을 지원할 수 있어요.",
-      eligibilityChecks: ["현재 취업 상태", "가구 기준 중위소득", "가구 재산", "최근 취업 경험", "다른 구직사업 참여 여부"],
-      requiredDocuments: ["신분 확인서류", "가구원 확인서류", "소득·재산 자료", "퇴직·구직 상태 증빙"],
-      applicationSteps: ["고용24 자가진단", "취업지원 신청", "고용센터 상담", "취업활동계획 수립", "구직활동 이행"],
-      applicationLocation: "고용24 온라인 신청 또는 거주지 관할 고용복지플러스센터",
-      deadline: "상시 신청 가능 여부를 고용24에서 확인",
-      risks: ["구직활동 의무 미이행 시 지원 중단 가능", "실업급여 등 일부 제도와 동시 참여 제한 가능"],
-      url: "https://www.work24.go.kr",
-    },
-  ],
-};
-
 type ReportProfile = {
   household: string;
   housing: string;
@@ -239,7 +199,6 @@ function App() {
   const [reportConsent, setReportConsent] = useState(false);
   const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
   const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
-  const [reportDemo, setReportDemo] = useState(false);
   const [storedReport, setStoredReport] = useState<StoredReport | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState("");
 
@@ -454,7 +413,6 @@ function App() {
     localStorage.removeItem(PENDING_REPORT_KEY);
     setStoredReport(stored);
     setPendingOrderId("");
-    setReportDemo(false);
     setReport(nextReport);
   };
 
@@ -685,7 +643,7 @@ function App() {
 
       <section className="paid-report-card featured">
         <div className="report-card-copy"><span className="report-launch-badge">출시 기념가</span><h2>받을 수 있는 혜택,<br />AI가 순서대로 정리해요</h2><p>가구·소득·직업까지 분석한 신청 우선순위와 준비서류를 확인하세요.</p></div>
-        <div className="report-card-actions"><button className="report-demo-button" onClick={() => { setReportDemo(true); setReport(DEMO_REPORT); setReportOpen(true); }}>예시 보기</button><button className="report-price-button" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReportDemo(false); setReport(storedReport?.report || null); setReportOpen(true); }}><span>{storedReport ? "최근 결과 보기" : "990원에 보기"}</span><b>›</b></button></div>
+        <button className="report-price-button report-price-button-large" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReport(storedReport?.report || null); setReportOpen(true); }}><span>{storedReport ? "최근 맞춤 결과 보기" : "990원에 맞춤 분석하기"}</span><b>›</b></button>
       </section>
 
       <section className="search-panel" aria-label="혜택 검색">
@@ -828,7 +786,7 @@ function App() {
             <h2>조건상 확인해 볼 혜택이<br /><em>{count.toLocaleString()}개</em> 있어요</h2>
             <p>AI가 실제 신청 가능성을 한 번 더 분석하고, 놓치기 쉬운 혜택부터 순서대로 정리해 드릴게요.</p>
             <div className="nudge-price"><strong>출시 기념가 990원</strong></div>
-            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReportDemo(false); setReport(storedReport?.report || null); setReportOpen(true); }}>전체 맞춤 리포트 보기</button>
+            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReport(storedReport?.report || null); setReportOpen(true); }}>전체 맞춤 리포트 보기</button>
             <button className="nudge-later" onClick={() => setReportNudgeOpen(false)}>무료 조회 결과 계속 보기</button>
           </section>
         </div>
@@ -842,8 +800,7 @@ function App() {
             <h2>신청에 필요한 정보만<br />카드로 쉽게 확인해요</h2>
             {report ? (
               <div className="report-result">
-                {reportDemo && <div className="report-demo-notice">샘플 화면이에요 · 실제 결과는 입력한 조건에 따라 달라져요.</div>}
-                {!reportDemo && storedReport && <div className="report-saved-at">최근 결과 · {new Date(storedReport.createdAt).toLocaleDateString("ko-KR")}</div>}
+                {storedReport && <div className="report-saved-at">최근 결과 · {new Date(storedReport.createdAt).toLocaleDateString("ko-KR")}</div>}
                 <div className="report-document-head"><span>나라가쏜다 AI 맞춤 복지 카드</span><h3>{report.title}</h3><p>{report.generatedFor}</p></div>
                 <div className="report-quick-summary"><b>한눈에 보는 분석</b><p>{report.executiveSummary}</p><small>{report.priorityStrategy}</small></div>
                 <div className="report-profile-chips">{report.profileAnalysis.map((item) => <span key={item.label}><b>{item.label}</b>{item.assessment}</span>)}</div>
@@ -863,7 +820,6 @@ function App() {
                 <ReportSection title="오늘부터 할 일"><ol>{report.actionPlan.map((item) => <li key={item}>{item}</li>)}</ol></ReportSection>
                 <ReportSection title="꼭 확인해 주세요" warning><ul>{report.generalCautions.map((item) => <li key={item}>{item}</li>)}</ul></ReportSection>
                 <p className="report-disclaimer">AI가 공개 정보를 바탕으로 만든 참고 자료예요. 실제 자격과 신청 조건은 기관에서 최종 확인해 주세요.</p>
-                {reportDemo && <button className="tds-primary-button" onClick={() => { setReportDemo(false); setReport(null); }}>내 조건으로 990원에 분석하기</button>}
               </div>
             ) : (
               <>
