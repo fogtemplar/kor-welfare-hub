@@ -128,6 +128,33 @@ const regions = [
   "제주특별자치도",
 ];
 
+const AUDIENCE_TERMS = ["저소득층", "기초생활수급자", "차상위계층", "국가유공자", "청년", "청소년", "아동", "영유아", "학생", "대학생", "근로자", "구직자", "소상공인", "자영업자", "신혼부부", "한부모", "다문화가족", "임산부", "장애인", "노인", "농업인", "어업인"];
+
+function isGenericPolicyText(value?: string) {
+  if (!value) return true;
+  return /상세\s*페이지에서\s*확인|지원\s*내용\s*다양|누리집에서\s*확인/.test(value);
+}
+
+function policySummary(policy: Policy) {
+  if (policy.summary && !isGenericPolicyText(policy.summary)) return policy.summary;
+  if (policy.benefit && !isGenericPolicyText(policy.benefit)) return policy.benefit;
+  const categoryLabel = categories.find(([key]) => key === policy.category)?.[1] || "복지";
+  return `${policy.title}과 관련된 ${categoryLabel} 지원 정책이에요. 지원 범위와 금액은 신청자의 조건에 따라 달라질 수 있어요.`;
+}
+
+function policyBenefit(policy: Policy) {
+  return isGenericPolicyText(policy.benefit) ? policySummary(policy) : policy.benefit;
+}
+
+function policyAudience(policy: Policy) {
+  if (!isGenericPolicyText(policy.eligibility)) return policy.eligibility;
+  const searchable = `${policy.title} ${policy.summary}`;
+  const matches = AUDIENCE_TERMS.filter((term) => searchable.includes(term)).slice(0, 4);
+  if (matches.length > 0) return `${matches.join("·")} 등 정책 요건을 충족하는 사람이 주요 확인 대상이에요. 소득·연령·가구 조건은 공식 안내에서 확인해 주세요.`;
+  const categoryLabel = categories.find(([key]) => key === policy.category)?.[1] || "복지";
+  return `${categoryLabel} 지원이 필요한 사람 중 정책별 연령·소득·가구 요건을 충족하는 경우 신청할 수 있어요.`;
+}
+
 function App() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -701,8 +728,8 @@ function App() {
               </div>
               <button className="card-main" onClick={() => { setSelected(policy); track("welfare_detail_view", { policy_id: policy.id }); }}>
                 <h2>{policy.title}</h2>
-                <p className="policy-summary">{policy.summary || policy.benefit}</p>
-                <div className="policy-audience-preview"><b>지원 대상</b><span>{policy.eligibility || "세부 대상은 공식 안내에서 확인해 주세요."}</span></div>
+                <p className="policy-summary">{policySummary(policy)}</p>
+                <div className="policy-audience-preview"><b>지원 대상</b><span>{policyAudience(policy)}</span></div>
                 <div className="card-meta"><small>{policy.agency}</small><span aria-hidden="true">›</span></div>
               </button>
             </article>
@@ -732,8 +759,8 @@ function App() {
             <button className="close-button" aria-label="닫기" onClick={() => setSelected(null)}>×</button>
             <span className="detail-agency">{selected.agency}</span>
             <h2>{selected.title}</h2>
-            <DetailBlock title="지원 내용" text={selected.benefit || selected.summary} />
-            <DetailBlock title="신청 대상" text={selected.eligibility} />
+            <DetailBlock title="지원 내용" text={policyBenefit(selected)} />
+            <DetailBlock title="신청 대상" text={policyAudience(selected)} />
             <DetailBlock title="신청 방법" text={selected.howTo} />
             <div className="application-checklist">
               <h3>신청 체크리스트</h3>
