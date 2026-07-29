@@ -642,8 +642,8 @@ function App() {
       {!online && <div className="network-banner" role="status">오프라인 상태예요. 연결되면 다시 시도해 주세요.</div>}
 
       <section className="paid-report-card featured">
-        <div className="report-card-copy"><span className="report-launch-badge">출시 기념가</span><h2>받을 수 있는 혜택,<br />AI가 순서대로 정리해요</h2><p>가구·소득·직업까지 분석한 신청 우선순위와 준비서류를 확인하세요.</p></div>
-        <button className="report-price-button report-price-button-large" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReport(storedReport?.report || null); setReportOpen(true); }}><small>{storedReport ? "지난 분석 결과" : "AI 맞춤 분석 · 1회"}</small><span>{storedReport ? "내 맞춤 결과 다시 보기" : "내 복지 혜택 자세히 보기"}</span>{!storedReport && <em>990원</em>}<b>›</b></button>
+        <div className="report-card-copy"><span className="report-launch-badge">놓치면 아까운 숨은 혜택</span><h2>내 조건에 맞는 지원금,<br />얼마나 놓치고 있을까요?</h2><p>가구·소득·주거·직업을 분석해 나에게 맞는 혜택과 신청 방법을 한눈에 정리해 드려요.</p></div>
+        <button className="report-price-button report-price-button-large" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReport(storedReport?.report || null); setReportOpen(true); }}><small>{storedReport ? "지난 분석 결과" : "AI 숨은 혜택 분석 · 1회"}</small><span>{storedReport ? "내 맞춤 결과 다시 보기" : "내 숨은 복지 혜택 확인하기"}</span>{!storedReport && <em>990원</em>}<b>›</b></button>
       </section>
 
       <section className="search-panel" aria-label="혜택 검색">
