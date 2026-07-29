@@ -1,5 +1,5 @@
 import { appLogin, eventLog, getConsentedUserData, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import "./App.css";
 
 const TdsExternalDialog = lazy(() => import("./TdsExternalDialog"));
@@ -11,6 +11,8 @@ const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
 const REPORT_KEY = "kor-welfare-hub:ait:last-report:v3";
 const PENDING_REPORT_KEY = "kor-welfare-hub:ait:pending-report:v1";
+const ONBOARDING_KEY = "kor-welfare-hub:ait:onboarding:v1";
+const PROFILE_KEY = "kor-welfare-hub:ait:report-profile:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
 const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
 
@@ -40,12 +42,16 @@ type ReportProfile = {
   youngestChildAge: string;
   pregnant: boolean;
   hasDisability: boolean;
+  supportNeeds: string[];
+  interests: string[];
 };
 
-const EMPTY_REPORT_PROFILE: ReportProfile = { household: "", housing: "", statuses: [], incomePct: "", childrenCount: "0", youngestChildAge: "", pregnant: false, hasDisability: false };
+const EMPTY_REPORT_PROFILE: ReportProfile = { household: "", housing: "", statuses: [], incomePct: "", childrenCount: "0", youngestChildAge: "", pregnant: false, hasDisability: false, supportNeeds: [], interests: [] };
 const HOUSEHOLDS = [["single", "1인 가구"], ["couple", "부부"], ["newlywed", "신혼"], ["general", "일반 가구"], ["multi-child", "다자녀"], ["single-parent", "한부모"], ["multicultural", "다문화"]];
 const HOUSINGS = [["own", "자가"], ["jeonse", "전세"], ["monthly", "월세"], ["with-family", "가족과 거주"], ["homeless", "주거 불안정"]];
 const STATUSES = [["student", "대학(원)생"], ["jobseeker", "구직 중"], ["employed", "재직 중"], ["self-employed", "자영업·프리랜서"], ["preparing-startup", "창업 준비"], ["farmer", "농어업"], ["career-break", "경력단절·휴직"], ["retired", "은퇴"]];
+const SUPPORT_NEEDS = [["debt", "부채 부담"], ["care", "가족 돌봄"], ["illness", "질병·치료"], ["job-loss", "실직·소득 감소"], ["housing-risk", "주거 불안"], ["education", "교육비 부담"]];
+const INTERESTS = [["housing", "주거·월세"], ["employment", "취업·훈련"], ["living", "생활비"], ["childcare", "출산·육아"], ["health", "의료·건강"], ["finance", "저축·금융"], ["education", "교육·장학"], ["startup", "창업"]];
 
 type TossProfile = {
   userKey: number;
@@ -199,6 +205,8 @@ function App() {
   const [reportConsent, setReportConsent] = useState(false);
   const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
   const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
   const [storedReport, setStoredReport] = useState<StoredReport | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState("");
 
@@ -215,6 +223,20 @@ function App() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem(PROFILE_KEY);
+      if (savedProfile) setReportProfile((current) => ({ ...current, ...(JSON.parse(savedProfile) as Partial<ReportProfile>) }));
+      if (!localStorage.getItem(ONBOARDING_KEY)) setOnboardingOpen(true);
+    } catch {
+      setOnboardingOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!onboardingOpen) localStorage.setItem(PROFILE_KEY, JSON.stringify(reportProfile));
+  }, [onboardingOpen, reportProfile]);
 
   useEffect(() => {
     try {
@@ -608,8 +630,19 @@ function App() {
     });
   };
 
+  const finishOnboarding = () => {
+    localStorage.setItem(ONBOARDING_KEY, "completed");
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(reportProfile));
+    const preferredCategory = reportProfile.interests.find((item) => categories.some(([key]) => key === item));
+    if (preferredCategory) setCategory(preferredCategory);
+    setPage(0);
+    setOnboardingOpen(false);
+    track("welfare_onboarding_complete", { interests: reportProfile.interests.length });
+  };
+
   return (
     <main className="app-shell">
+      {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} profile={reportProfile} setProfile={setReportProfile} onStep={setOnboardingStep} onDone={finishOnboarding} onSkip={finishOnboarding} />}
       <header className="hero">
         <div className="account-row">
           <div className="brand-lockup">
@@ -866,6 +899,45 @@ function DeadlineBadge({ policy }: { policy: Policy }) {
   if (days < 0) return <span className="deadline-badge closed">마감 확인</span>;
   if (days <= 30) return <span className="deadline-badge urgent">D-{days}</span>;
   return <span className="deadline-badge">~ {deadline.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}</span>;
+}
+
+function FirstVisitOnboarding({ step, profile, setProfile, onStep, onDone, onSkip }: { step: number; profile: ReportProfile; setProfile: Dispatch<SetStateAction<ReportProfile>>; onStep: (step: number) => void; onDone: () => void; onSkip: () => void }) {
+  const steps = [
+    { title: "가구 유형을 알려주세요", description: "함께 사는 가족 구성에 따라 받을 수 있는 혜택이 달라져요." },
+    { title: "현재 주거 상황은 어떤가요?", description: "월세·전세·자가 여부를 주거지원 검색에 활용해요." },
+    { title: "현재 경제활동 상태를 알려주세요", description: "여러 상황에 해당하면 모두 선택해 주세요." },
+    { title: "가구 소득은 어느 구간인가요?", description: "정확하지 않아도 가장 가까운 구간을 골라주세요." },
+    { title: "자녀·임신·장애 정보를 확인할게요", description: "해당 정보는 관련 혜택을 찾는 데만 사용해요." },
+    { title: "특별히 어려운 상황이 있나요?", description: "해당하는 항목을 모두 선택하거나 건너뛸 수 있어요." },
+    { title: "어떤 지원을 가장 찾고 싶나요?", description: "관심 분야를 중심으로 첫 화면과 AI 분석을 맞춰드려요." },
+  ];
+  const toggleArray = (field: "statuses" | "supportNeeds" | "interests", value: string) => setProfile((current) => ({ ...current, [field]: current[field].includes(value) ? current[field].filter((item) => item !== value) : [...current[field], value] }));
+  const canContinue = step === 0 ? Boolean(profile.household) : step === 1 ? Boolean(profile.housing) : step === 2 ? profile.statuses.length > 0 : step === 3 ? Boolean(profile.incomePct) : step === 6 ? profile.interests.length > 0 : true;
+  const next = () => step === steps.length - 1 ? onDone() : onStep(step + 1);
+
+  return <div className="first-onboarding" role="dialog" aria-modal="true" aria-label="맞춤 혜택 설정">
+    <div className="onboarding-top"><button disabled={step === 0} onClick={() => onStep(step - 1)} aria-label="이전">‹</button><div><span>{step + 1}</span> / {steps.length}</div><button onClick={onSkip}>건너뛰기</button></div>
+    <div className="onboarding-progress"><i style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
+    <section className="onboarding-content">
+      <span className="onboarding-eyebrow">내 조건에 맞는 숨은 혜택 찾기</span>
+      <h1>{steps[step].title}</h1><p>{steps[step].description}</p>
+      {step === 0 && <OnboardingChoices options={HOUSEHOLDS} values={[profile.household]} onSelect={(value) => setProfile((current) => ({ ...current, household: value }))} />}
+      {step === 1 && <OnboardingChoices options={HOUSINGS} values={[profile.housing]} onSelect={(value) => setProfile((current) => ({ ...current, housing: value }))} />}
+      {step === 2 && <OnboardingChoices options={STATUSES} values={profile.statuses} onSelect={(value) => toggleArray("statuses", value)} multiple />}
+      {step === 3 && <OnboardingChoices options={[["50", "중위소득 50% 이하"], ["75", "중위소득 75% 이하"], ["100", "중위소득 100% 이하"], ["150", "중위소득 150% 이하"], ["250", "중위소득 250% 이하"], ["999", "잘 모르겠어요"]]} values={[profile.incomePct]} onSelect={(value) => setProfile((current) => ({ ...current, incomePct: value }))} />}
+      {step === 4 && <div className="onboarding-family"><label><span>자녀 수</span><select value={profile.childrenCount} onChange={(event) => setProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option value={count} key={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={profile.childrenCount === "0"} value={profile.youngestChildAge} onChange={(event) => setProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label><button className={profile.pregnant ? "selected" : ""} onClick={() => setProfile((current) => ({ ...current, pregnant: !current.pregnant }))}>임신 중이에요</button><button className={profile.hasDisability ? "selected" : ""} onClick={() => setProfile((current) => ({ ...current, hasDisability: !current.hasDisability }))}>등록 장애인이에요</button></div>}
+      {step === 5 && <OnboardingChoices options={SUPPORT_NEEDS} values={profile.supportNeeds} onSelect={(value) => toggleArray("supportNeeds", value)} multiple />}
+      {step === 6 && <OnboardingChoices options={INTERESTS} values={profile.interests} onSelect={(value) => toggleArray("interests", value)} multiple />}
+    </section>
+    <div className="onboarding-bottom">
+      <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd /></Suspense>
+      <button className="onboarding-next" disabled={!canContinue} onClick={next}>{step === steps.length - 1 ? "맞춤 혜택 보기" : "다음"}</button>
+    </div>
+  </div>;
+}
+
+function OnboardingChoices({ options, values, onSelect, multiple = false }: { options: string[][]; values: string[]; onSelect: (value: string) => void; multiple?: boolean }) {
+  return <div className="onboarding-choices">{options.map(([value, label]) => <button key={value} className={values.includes(value) ? "selected" : ""} onClick={() => onSelect(value)}><span>{label}</span><b>{values.includes(value) ? "✓" : "›"}</b></button>)}{multiple && <small>복수 선택할 수 있어요.</small>}</div>;
 }
 
 function ReportSection({ title, children, warning = false }: { title: string; children: ReactNode; warning?: boolean }) {

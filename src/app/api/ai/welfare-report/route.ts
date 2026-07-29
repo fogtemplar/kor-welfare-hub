@@ -11,7 +11,7 @@ type ReportRequest = {
   details?: string;
   filters?: { age?: number | null; region?: string; category?: string };
   tossData?: { gender?: string; nationality?: string };
-  profile?: { household?: string; housing?: string; statuses?: string[]; incomePct?: string; childrenCount?: string; youngestChildAge?: string; pregnant?: boolean; hasDisability?: boolean };
+  profile?: { household?: string; housing?: string; statuses?: string[]; incomePct?: string; childrenCount?: string; youngestChildAge?: string; pregnant?: boolean; hasDisability?: boolean; supportNeeds?: string[]; interests?: string[] };
 };
 
 const recentOrders = new Map<string, { createdAt: number; report?: unknown }>();
