@@ -1012,7 +1012,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
     </section>
     <div className="onboarding-bottom">
       {/* 1~9단계 모두 동일한 승인 배너 광고 그룹을 하단에 노출한다. */}
-      <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd /></Suspense>
+      <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd placement={`onboarding_${step + 1}`} /></Suspense>
       <button className="onboarding-next" disabled={!canContinue} onClick={next}>{step === steps.length - 1 ? "맞춤 혜택 보기" : "다음"}</button>
     </div>
   </div>;

@@ -110,8 +110,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .saved-filter { min-height: 36px; padding: 0 11px; border: 0; border-radius: 11px; background: #f2f4f6; color: #8b95a1; font-size: 12px; font-weight: 700; }
 .saved-filter.active, .heart.active { color: #f04452; background: #fff0f1; }
 .policy-list { display: grid; gap: 11px; }
-.toss-banner { display: none; overflow: hidden; border-radius: 18px; }
-.toss-banner.visible { display: block; }
+.toss-banner { width: 100%; min-height: 96px; overflow: hidden; border-radius: 18px; }
+.toss-banner.hidden { display: none; min-height: 0; }
+.toss-banner.loading { visibility: hidden; }
+.toss-banner > div { width: 100%; min-height: 96px; }
 .toss-banner > span { display: block; margin: 0 0 5px 4px; color: #adb5bd; font-size: 9px; }
 .policy-card { padding: 17px; border: 1px solid #e8ebed; border-radius: 19px; background: #fff; box-shadow: 0 5px 18px rgba(0,27,55,.045); transition: transform .15s ease, box-shadow .15s ease; }
 .policy-card:active { transform: scale(.985); box-shadow: 0 2px 8px rgba(0,27,55,.04); }
