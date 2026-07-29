@@ -1,7 +1,7 @@
 import { TossAds } from "@apps-in-toss/web-framework";
 import { useEffect, useRef, useState } from "react";
 
-const AD_GROUP_ID = import.meta.env.VITE_TOSS_BANNER_AD_GROUP_ID?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
+const AD_GROUP_ID = import.meta.env.VITE_TOSS_BANNER_AD_GROUP_ID?.trim() || "";
 
 export default function TossBannerAd() {
   const targetRef = useRef<HTMLDivElement>(null);

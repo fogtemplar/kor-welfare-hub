@@ -10,7 +10,7 @@ const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
-const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "welfare_report_990";
+const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
 
 type WelfareReport = {
   title: string;
