@@ -1,4 +1,4 @@
-import { appLogin, closeView, eventLog, getConsentedUserData, getSchemeUri, graniteEvent, IAP, openURL, SafeAreaInsets, Storage } from "@apps-in-toss/web-framework";
+import { appLogin, closeView, eventLog, getConsentedUserData, getSchemeUri, graniteEvent, IAP, loadFullScreenAd, openURL, SafeAreaInsets, showFullScreenAd, Storage } from "@apps-in-toss/web-framework";
 import { lazy, Suspense, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import "./App.css";
 
@@ -15,6 +15,7 @@ const ONBOARDING_KEY = "kor-welfare-hub:ait:onboarding:v1";
 const PROFILE_KEY = "kor-welfare-hub:ait:report-profile:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
 const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
+const RESULT_AD_GROUP_ID = import.meta.env.VITE_TOSS_RESULT_AD_GROUP_ID?.trim() || "ait.v2.live.d262e086d3144d18";
 
 type WelfareReport = {
   title: string;
@@ -981,14 +982,64 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
     { title: "어떤 지원을 가장 찾고 싶나요?", description: "관심 분야를 중심으로 첫 화면과 AI 분석을 맞춰드려요." },
   ];
   const questionStep = step - 2;
+  const shouldPreloadResultAd = step >= steps.length - 2;
+  const [resultAdReady, setResultAdReady] = useState(false);
+  const [resultAdShowing, setResultAdShowing] = useState(false);
+
+  useEffect(() => {
+    if (!shouldPreloadResultAd || !RESULT_AD_GROUP_ID) {
+      setResultAdReady(false);
+      return;
+    }
+    try {
+      if (!loadFullScreenAd.isSupported() || !showFullScreenAd.isSupported()) return;
+    } catch {
+      return;
+    }
+    const cleanup = loadFullScreenAd({
+      options: { adGroupId: RESULT_AD_GROUP_ID },
+      onEvent: ({ type }) => {
+        if (type === "loaded") {
+          setResultAdReady(true);
+          void eventLog({ log_name: "welfare_result_ad_loaded", log_type: "event" }).catch(() => undefined);
+        }
+      },
+      onError: () => {
+        setResultAdReady(false);
+        void eventLog({ log_name: "welfare_result_ad_load_failed", log_type: "event" }).catch(() => undefined);
+      },
+    });
+    return cleanup;
+  }, [shouldPreloadResultAd]);
+
   const toggleArray = (field: "statuses" | "supportNeeds" | "interests", value: string) => setProfile((current) => ({ ...current, [field]: current[field].includes(value) ? current[field].filter((item) => item !== value) : [...current[field], value] }));
   const canContinue = step === 0 ? Boolean(tossProfile) : step === 1 ? Boolean(consentedData) : questionStep === 0 ? Boolean(profile.household) : questionStep === 1 ? Boolean(profile.housing) : questionStep === 2 ? profile.statuses.length > 0 : questionStep === 3 ? Boolean(profile.incomePct) : questionStep === 6 ? profile.interests.length > 0 : true;
   const next = () => {
     if (step === steps.length - 1) {
-      // TODO(AIT 전면형 광고): 광고 그룹 승인이 끝나면 마지막 단계에서
-      // `광고 보고 결과 확인` → 전면형 광고 종료 콜백 → onDone() 순서로 연결한다.
-      // 광고 로드 실패·사용자 닫기 시에도 결과 확인을 막지 않도록 onDone() 폴백을 유지한다.
-      onDone();
+      if (!resultAdReady || resultAdShowing) {
+        onDone();
+        return;
+      }
+      setResultAdShowing(true);
+      let completed = false;
+      const finish = () => {
+        if (completed) return;
+        completed = true;
+        setResultAdShowing(false);
+        onDone();
+      };
+      try {
+        showFullScreenAd({
+          options: { adGroupId: RESULT_AD_GROUP_ID },
+          onEvent: ({ type }) => {
+            if (type === "show") void eventLog({ log_name: "welfare_result_ad_shown", log_type: "event" }).catch(() => undefined);
+            if (type === "dismissed" || type === "failedToShow") finish();
+          },
+          onError: finish,
+        });
+      } catch {
+        finish();
+      }
       return;
     }
     onStep(step + 1);
@@ -1013,7 +1064,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
     <div className="onboarding-bottom">
       {/* 1~9단계 모두 동일한 승인 배너 광고 그룹을 하단에 노출한다. */}
       <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd placement={`onboarding_${step + 1}`} /></Suspense>
-      <button className="onboarding-next" disabled={!canContinue} onClick={next}>{step === steps.length - 1 ? "맞춤 혜택 보기" : "다음"}</button>
+      <button className="onboarding-next" disabled={!canContinue || resultAdShowing} onClick={next}>{step === steps.length - 1 ? resultAdShowing ? "결과를 준비하고 있어요…" : "광고 보고 맞춤 혜택 보기" : "다음"}</button>
     </div>
   </div>;
 }
