@@ -666,29 +666,53 @@ function App() {
           localStorage.setItem(PENDING_REPORT_KEY, orderId);
           setPendingOrderId(orderId);
           try {
-            await generateReport(orderId);
+            const response = await fetch(`${API_BASE}/api/toss/iap/grant`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId, sku: REPORT_SKU }),
+            });
+            if (!response.ok) throw new Error(`GRANT_${response.status}`);
             return true;
           } catch {
-            setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
-            track("welfare_report_generation_failed");
+            setReportError("결제 확인에 실패했어요. 결제 내역은 보존되며 잠시 후 다시 시도할 수 있어요.");
+            track("welfare_report_grant_failed");
             return false;
           }
         },
       },
-      onEvent: () => {
-        setReportLoading(false);
+      onEvent: async (event) => {
         cleanup();
+        const orderId = event.data.orderId;
+        localStorage.setItem(PENDING_REPORT_KEY, orderId);
+        setPendingOrderId(orderId);
+        try {
+          await generateReport(orderId);
+        } catch {
+          setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
+          track("welfare_report_generation_failed");
+        } finally {
+          setReportLoading(false);
+        }
       },
       onError: (reason) => {
-        const message = reason instanceof Error ? reason.message.toLowerCase() : String(reason).toLowerCase();
+        const errorValue = reason as { code?: string; message?: string } | null;
+        const message = `${errorValue?.code || ""} ${errorValue?.message || (reason instanceof Error ? reason.message : String(reason))}`.toLowerCase();
         setReportLoading(false);
         if (message.includes("cancel") || message.includes("user_canceled")) {
           setReportError("결제를 취소했어요. 결제된 금액은 없어요.");
-        } else if (message.includes("already_owned")) {
+        } else if (message.includes("already_owned") || message.includes("item_already_owned") || message.includes("payment_pending")) {
           setReportError("처리 중인 구매가 있어요. 잠시 후 다시 확인해 주세요.");
+        } else if (message.includes("invalid_product")) {
+          setReportError("등록된 결제 상품을 찾지 못했어요. 앱인토스 상품 노출 상태를 확인해 주세요.");
+        } else if (message.includes("invalid_user_environment") || message.includes("korean_account_only")) {
+          setReportError("현재 기기 또는 앱스토어 계정에서는 이 상품을 구매할 수 없어요.");
+        } else if (message.includes("product_not_granted")) {
+          setReportError("결제 확인이 지연되고 있어요. 결제 내역은 보존되며 잠시 후 다시 시도할 수 있어요.");
         } else {
           setReportError("결제를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
         }
+        track("welfare_report_payment_error", { error_code: errorValue?.code || "UNKNOWN" });
         cleanup();
       },
     });
