@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CURATED_POLICIES } from "@/lib/data/policies";
-import { saveUserReport } from "@/lib/report-store";
+import { deletePendingRewardReport, getLatestUserReport, getPendingRewardReport, savePendingRewardReport, saveUserReport } from "@/lib/report-store";
+import { consumeRewardPass, verifyRewardChallenge, verifyRewardPass } from "@/lib/reward-pass";
 import { fetchExternalPolicies } from "@/lib/scrapers/aggregate";
 import { getTossIapOrderStatus } from "@/lib/toss-login";
 import { openSession, TOSS_SESSION_COOKIE } from "@/lib/toss-session";
@@ -11,6 +12,9 @@ export const maxDuration = 60;
 
 type ReportRequest = {
   orderId?: string;
+  rewardToken?: string;
+  rewardChallenge?: string;
+  mode?: "preGenerate";
   details?: string;
   filters?: { age?: number | null; region?: string; category?: string };
   tossData?: { gender?: string; nationality?: string };
@@ -49,29 +53,64 @@ export async function POST(request: NextRequest) {
   catch { return NextResponse.json({ error: "INVALID_JSON" }, { status: 400 }); }
 
   const orderId = String(body.orderId || "").trim();
+  const rewardToken = String(body.rewardToken || "").trim();
+  const rewardChallenge = String(body.rewardChallenge || "").trim();
+  const preGenerate = body.mode === "preGenerate" && rewardChallenge.length >= 24;
+  const reportId = preGenerate ? `pending:${rewardChallenge}` : rewardToken ? `reward:${rewardToken}` : orderId;
   const details = String(body.details || "").trim();
-  if (orderId.length < 8 || details.length > 700 || !body.profile?.household || !body.profile?.housing || !body.profile?.incomePct) return NextResponse.json({ error: "INVALID_REPORT_REQUEST" }, { status: 400 });
+  if (reportId.length < 8 || details.length > 700 || !body.profile?.household || !body.profile?.housing || !body.profile?.incomePct) return NextResponse.json({ error: "INVALID_REPORT_REQUEST" }, { status: 400 });
   if (/\d{6}\s*-?\s*[1-4]\d{6}/.test(details)) return NextResponse.json({ error: "주민등록번호는 입력할 수 없어요." }, { status: 400 });
 
   const session = openSession(request.cookies.get(TOSS_SESSION_COOKIE)?.value || "");
   if (!session) return NextResponse.json({ error: "TOSS_LOGIN_REQUIRED" }, { status: 401 });
-  try {
-    const order = await getTossIapOrderStatus(orderId, session.profile.userKey);
-    const validStatus = order.status === "PAYMENT_COMPLETED" || order.status === "PURCHASED";
-    const expectedSku = process.env.TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
-    if (!validStatus || order.sku !== expectedSku) {
-      return NextResponse.json({ error: "PAYMENT_NOT_VERIFIED" }, { status: 402 });
+  if (preGenerate) {
+    try {
+      if (!await verifyRewardChallenge(session.profile.userKey, rewardChallenge)) return NextResponse.json({ error: "REWARD_CHALLENGE_NOT_VERIFIED" }, { status: 402 });
+    } catch (error) {
+      console.error("[ai/welfare-report] challenge verification failed", error);
+      return NextResponse.json({ error: "REWARD_VERIFICATION_FAILED" }, { status: 503 });
     }
-  } catch (error) {
-    console.error("[ai/welfare-report] order verification failed", error);
-    return NextResponse.json({ error: "PAYMENT_VERIFICATION_FAILED" }, { status: 503 });
+  } else if (rewardToken) {
+    try {
+      const reward = await verifyRewardPass(session.profile.userKey, rewardToken);
+      if (!reward) return NextResponse.json({ error: "REWARD_PASS_NOT_VERIFIED" }, { status: 402 });
+      if (reward.status === "consumed") {
+        const stored = await getLatestUserReport(session.profile.userKey);
+        if (stored?.orderId === reportId) return NextResponse.json(stored.report, { headers: { "Cache-Control": "no-store" } });
+        return NextResponse.json({ error: "REWARD_PASS_ALREADY_USED" }, { status: 402 });
+      }
+      if (reward.challenge) {
+        const pending = await getPendingRewardReport(session.profile.userKey, reward.challenge);
+        if (pending) {
+          const saved = await saveUserReport(session.profile.userKey, { orderId: reportId, createdAt: new Date().toISOString(), report: pending.report });
+          if (!saved || !await consumeRewardPass(session.profile.userKey, rewardToken)) throw new Error("REWARD_PASS_CONSUME_FAILED");
+          await deletePendingRewardReport(session.profile.userKey, reward.challenge);
+          return NextResponse.json(pending.report, { headers: { "Cache-Control": "no-store" } });
+        }
+      }
+    } catch (error) {
+      console.error("[ai/welfare-report] reward verification failed", error);
+      return NextResponse.json({ error: "REWARD_VERIFICATION_FAILED" }, { status: 503 });
+    }
+  } else {
+    try {
+      const order = await getTossIapOrderStatus(orderId, session.profile.userKey);
+      const validStatus = order.status === "PAYMENT_COMPLETED" || order.status === "PURCHASED";
+      const expectedSku = process.env.TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
+      if (!validStatus || order.sku !== expectedSku) {
+        return NextResponse.json({ error: "PAYMENT_NOT_VERIFIED" }, { status: 402 });
+      }
+    } catch (error) {
+      console.error("[ai/welfare-report] order verification failed", error);
+      return NextResponse.json({ error: "PAYMENT_VERIFICATION_FAILED" }, { status: 503 });
+    }
   }
 
   pruneOrders();
-  const existing = recentOrders.get(orderId);
-  if (existing?.report) return NextResponse.json(existing.report, { headers: { "Cache-Control": "no-store" } });
+  const existing = recentOrders.get(reportId);
+  if (existing?.report) return preGenerate ? NextResponse.json({ status: "ready" }, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json(existing.report, { headers: { "Cache-Control": "no-store" } });
   if (existing) return NextResponse.json({ error: "ORDER_PROCESSING" }, { status: 409 });
-  recentOrders.set(orderId, { createdAt: Date.now() });
+  recentOrders.set(reportId, { createdAt: Date.now() });
 
   try {
     const policies = [...CURATED_POLICIES, ...(await fetchExternalPolicies())]
@@ -123,15 +162,21 @@ export async function POST(request: NextRequest) {
     const outputText = getOutputText(payload);
     if (!outputText) throw new Error("EMPTY_REPORT");
     const report = JSON.parse(outputText) as unknown;
-    recentOrders.set(orderId, { createdAt: Date.now(), report });
+    recentOrders.set(reportId, { createdAt: Date.now(), report });
     try {
-      await saveUserReport(session.profile.userKey, { orderId, createdAt: new Date().toISOString(), report });
+      if (preGenerate) {
+        if (!await savePendingRewardReport(session.profile.userKey, rewardChallenge, report)) throw new Error("PENDING_REPORT_SAVE_FAILED");
+        return NextResponse.json({ status: "ready" }, { headers: { "Cache-Control": "no-store" } });
+      }
+      const saved = await saveUserReport(session.profile.userKey, { orderId: reportId, createdAt: new Date().toISOString(), report });
+      if (rewardToken && (!saved || !await consumeRewardPass(session.profile.userKey, rewardToken))) throw new Error("REWARD_PASS_CONSUME_FAILED");
     } catch (storeError) {
       console.error("[ai/welfare-report] persistent save failed", storeError);
+      if (rewardToken) throw storeError;
     }
     return NextResponse.json(report, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    recentOrders.delete(orderId);
+    recentOrders.delete(reportId);
     console.error("[ai/welfare-report] failed", error);
     return NextResponse.json({ error: "REPORT_GENERATION_FAILED" }, { status: 500 });
   }

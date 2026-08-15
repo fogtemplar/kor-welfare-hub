@@ -1,11 +1,11 @@
 import { appLogin, closeView, eventLog, getConsentedUserData, getSchemeUri, graniteEvent, IAP, loadFullScreenAd, openURL, SafeAreaInsets, showFullScreenAd, Storage } from "@apps-in-toss/web-framework";
-import { lazy, Suspense, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import "./App.css";
 
 const TdsExternalDialog = lazy(() => import("./TdsExternalDialog"));
 const TossBannerAd = lazy(() => import("./TossBannerAd"));
 
-const API_BASE = "https://kor-welfare-hub.vercel.app";
+const API_BASE = import.meta.env.VITE_API_BASE?.trim() || "https://kor-welfare-hub.vercel.app";
 const BRAND_ICON = "https://static.toss.im/appsintoss/45571/324cf347-98a8-46be-b3b5-c9ee5aec737d.png";
 const PAGE_SIZE = 30;
 const SAVED_KEY = "kor-welfare-hub:ait:saved:v1";
@@ -16,6 +16,7 @@ const PROFILE_KEY = "kor-welfare-hub:ait:report-profile:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
 const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
 const RESULT_AD_GROUP_ID = import.meta.env.VITE_TOSS_RESULT_AD_GROUP_ID?.trim() || "ait.v2.live.d262e086d3144d18";
+const REWARDED_REPORT_AD_GROUP_ID = import.meta.env.VITE_TOSS_REWARDED_REPORT_AD_GROUP_ID?.trim() || "ait.v2.live.11d5e3a1615d404e";
 
 type WelfareReport = {
   title: string;
@@ -33,6 +34,7 @@ type WelfareReport = {
 };
 
 type StoredReport = { orderId: string; createdAt: string; report: WelfareReport };
+type RewardPassStatus = "loading" | "available" | "issued" | "consumed" | "unavailable";
 
 type ReportProfile = {
   household: string;
@@ -199,6 +201,8 @@ function App() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [externalTarget, setExternalTarget] = useState<string | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportStep, setReportStep] = useState(0);
+  const [reportCardPage, setReportCardPage] = useState(0);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
   const [report, setReport] = useState<WelfareReport | null>(null);
@@ -211,10 +215,37 @@ function App() {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [storedReport, setStoredReport] = useState<StoredReport | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState("");
+  const [rewardPassStatus, setRewardPassStatus] = useState<RewardPassStatus>("loading");
+  const [rewardPassToken, setRewardPassToken] = useState("");
+  const [rewardAdReady, setRewardAdReady] = useState(false);
+  const [rewardGrantedOpen, setRewardGrantedOpen] = useState(false);
 
   const track = (name: string, params: Record<string, string | number | boolean | null> = {}) => {
     void eventLog({ log_name: name, log_type: "event", params }).catch(() => undefined);
   };
+
+  const loadRewardPassStatus = useCallback(async () => {
+    if (!profile) {
+      setRewardPassStatus("loading");
+      setRewardPassToken("");
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/api/toss/reward-pass`, { credentials: "include" });
+      const data = await response.json() as { status?: RewardPassStatus; token?: string };
+      if (!response.ok || !data.status) throw new Error("REWARD_STATUS_FAILED");
+      setRewardPassStatus(data.status);
+      setRewardPassToken(data.token || "");
+      if (data.status === "issued" && data.token) {
+        const rewardId = `reward:${data.token}`;
+        localStorage.setItem(PENDING_REPORT_KEY, rewardId);
+        setPendingOrderId((current) => current || rewardId);
+      }
+    } catch {
+      setRewardPassStatus("unavailable");
+      setRewardPassToken("");
+    }
+  }, [profile]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/toss/session`, { credentials: "include" })
@@ -238,6 +269,36 @@ function App() {
       })
       .catch(() => undefined);
   }, [profile]);
+
+  useEffect(() => {
+    void loadRewardPassStatus();
+  }, [loadRewardPassStatus]);
+
+  useEffect(() => {
+    if (!reportOpen || report || rewardPassStatus !== "available" || !REWARDED_REPORT_AD_GROUP_ID) {
+      setRewardAdReady(false);
+      return;
+    }
+    try {
+      if (!loadFullScreenAd.isSupported() || !showFullScreenAd.isSupported()) return;
+    } catch {
+      return;
+    }
+    const cleanup = loadFullScreenAd({
+      options: { adGroupId: REWARDED_REPORT_AD_GROUP_ID },
+      onEvent: ({ type }) => {
+        if (type === "loaded") {
+          setRewardAdReady(true);
+          track("welfare_reward_ad_loaded");
+        }
+      },
+      onError: () => {
+        setRewardAdReady(false);
+        track("welfare_reward_ad_load_failed");
+      },
+    });
+    return cleanup;
+  }, [reportOpen, report, rewardPassStatus]);
 
   useEffect(() => {
     try {
@@ -498,27 +559,63 @@ function App() {
     localStorage.removeItem(PENDING_REPORT_KEY);
     setStoredReport(stored);
     setPendingOrderId("");
+    setReportCardPage(0);
     setReport(nextReport);
   };
 
-  const generateReport = async (orderId: string) => {
-    const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId,
-        retry: pendingOrderId === orderId,
-        details: reportDetails.trim(),
-        filters: { age, region, category },
-        profile: reportProfile,
-        tossData: consentedData ? { gender: consentedData.USER_GENDER, nationality: consentedData.USER_NATIONALITY } : undefined,
-      }),
-    });
-    const data = await response.json() as WelfareReport & { error?: string };
-    if (!response.ok) throw new Error(data.error || "REPORT_FAILED");
-    saveReport(orderId, data);
-    track("welfare_report_complete");
+  const generateReport = async (reportAccessId: string) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 70_000);
+    const rewardToken = reportAccessId.startsWith("reward:") ? reportAccessId.slice("reward:".length) : "";
+    try {
+      const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
+        method: "POST",
+        credentials: "include",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: rewardToken ? undefined : reportAccessId,
+          rewardToken: rewardToken || undefined,
+          retry: pendingOrderId === reportAccessId,
+          details: reportDetails.trim(),
+          filters: { age, region, category },
+          profile: reportProfile,
+          tossData: consentedData ? { gender: consentedData.USER_GENDER, nationality: consentedData.USER_NATIONALITY } : undefined,
+        }),
+      });
+      const data = await response.json() as WelfareReport & { error?: string };
+      if (!response.ok) throw new Error(data.error || "REPORT_FAILED");
+      saveReport(reportAccessId, data);
+      track("welfare_report_complete", { access_type: rewardToken ? "reward" : "purchase" });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  const preGenerateRewardReport = async (rewardChallenge: string) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 70_000);
+    try {
+      const response = await fetch(`${API_BASE}/api/ai/welfare-report`, {
+        method: "POST",
+        credentials: "include",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "preGenerate",
+          rewardChallenge,
+          details: reportDetails.trim(),
+          filters: { age, region, category },
+          profile: reportProfile,
+          tossData: consentedData ? { gender: consentedData.USER_GENDER, nationality: consentedData.USER_NATIONALITY } : undefined,
+        }),
+      });
+      const data = await response.json() as { status?: string; error?: string };
+      if (!response.ok || data.status !== "ready") throw new Error(data.error || "REPORT_PREGENERATION_FAILED");
+      return true;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   };
 
   const retryPendingReport = async () => {
@@ -527,6 +624,10 @@ function App() {
     setReportError("");
     try {
       await generateReport(pendingOrderId);
+      if (pendingOrderId.startsWith("reward:")) {
+        setRewardPassStatus("consumed");
+        setRewardPassToken("");
+      }
     } catch {
       setReportError("리포트 생성에 다시 실패했어요. 입력 정보와 인터넷 연결을 확인한 뒤 재시도해 주세요.");
     } finally {
@@ -632,6 +733,127 @@ function App() {
     setAuthError("");
   };
 
+  const requestRewardedReport = async () => {
+    if (!reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct) {
+      setReportError("가구 유형, 주거 상황, 소득 구간을 선택하고 정보 처리에 동의해 주세요.");
+      return;
+    }
+    if (!profile) {
+      setReportError("첫 무료 리포트 이용권은 토스 로그인 후 받을 수 있어요.");
+      return;
+    }
+    if (rewardPassStatus === "issued" && rewardPassToken) {
+      const rewardId = `reward:${rewardPassToken}`;
+      localStorage.setItem(PENDING_REPORT_KEY, rewardId);
+      setPendingOrderId(rewardId);
+      setReportLoading(true);
+      setReportError("");
+      try {
+        await generateReport(rewardId);
+        setRewardPassStatus("consumed");
+        setRewardPassToken("");
+      } catch {
+        setReportError("리포트 생성에 실패했어요. 이용권은 유지되며 추가 광고 없이 다시 시도할 수 있어요.");
+      } finally {
+        setReportLoading(false);
+      }
+      return;
+    }
+    if (rewardPassStatus !== "available") {
+      setReportError("무료 이용권 상태를 확인하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      void loadRewardPassStatus();
+      return;
+    }
+    if (!rewardAdReady) {
+      setReportError("광고를 준비하고 있어요. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
+
+    setReportLoading(true);
+    setReportError("");
+    track("welfare_reward_ad_requested");
+    try {
+      const prepareResponse = await fetch(`${API_BASE}/api/toss/reward-pass`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "prepare" }),
+      });
+      const prepared = await prepareResponse.json() as { status?: RewardPassStatus; token?: string; challenge?: string; error?: string };
+      if (!prepareResponse.ok) throw new Error(prepared.error || "REWARD_PREPARE_FAILED");
+      if (prepared.status === "issued" && prepared.token) {
+        const rewardId = `reward:${prepared.token}`;
+        setRewardPassStatus("issued");
+        setRewardPassToken(prepared.token);
+        localStorage.setItem(PENDING_REPORT_KEY, rewardId);
+        setPendingOrderId(rewardId);
+        await generateReport(rewardId);
+        setRewardPassStatus("consumed");
+        setRewardPassToken("");
+        setReportLoading(false);
+        return;
+      }
+      if (!prepared.challenge) throw new Error("REWARD_CHALLENGE_MISSING");
+      const preGeneration = preGenerateRewardReport(prepared.challenge).catch(() => false);
+
+      let earned = false;
+      let settled = false;
+      let cleanup = () => undefined;
+      const fail = (message: string) => {
+        if (settled) return;
+        settled = true;
+        setReportLoading(false);
+        setReportError(message);
+        cleanup();
+      };
+      cleanup = showFullScreenAd({
+        options: { adGroupId: REWARDED_REPORT_AD_GROUP_ID },
+        onEvent: async ({ type }) => {
+          if (type === "userEarnedReward" && !earned) {
+            earned = true;
+            track("welfare_reward_ad_earned");
+            let rewardId = "";
+            try {
+              const claimResponse = await fetch(`${API_BASE}/api/toss/reward-pass`, {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "claim", challenge: prepared.challenge }),
+              });
+              const claimed = await claimResponse.json() as { status?: RewardPassStatus; token?: string; error?: string };
+              if (!claimResponse.ok || claimed.status !== "issued" || !claimed.token) throw new Error(claimed.error || "REWARD_CLAIM_FAILED");
+              rewardId = `reward:${claimed.token}`;
+              setRewardPassStatus("issued");
+              setRewardPassToken(claimed.token);
+              localStorage.setItem(PENDING_REPORT_KEY, rewardId);
+              setPendingOrderId(rewardId);
+            } catch {
+              fail("광고 시청은 완료됐지만 이용권 처리에 실패했어요. 잠시 후 다시 시도해 주세요.");
+              void loadRewardPassStatus();
+              return;
+            }
+
+            await preGeneration;
+            settled = true;
+            setReportLoading(false);
+            setReportError("");
+            setRewardGrantedOpen(true);
+            cleanup();
+          } else if (type === "dismissed" && !earned) {
+            fail("광고를 끝까지 보면 첫 리포트 무료 이용권을 받을 수 있어요.");
+          } else if (type === "failedToShow") {
+            fail("광고를 표시하지 못했어요. 잠시 후 다시 시도해 주세요.");
+          }
+        },
+        onError: () => fail("광고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요."),
+      });
+    } catch {
+      setReportLoading(false);
+      setReportError("무료 이용권을 준비하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      void loadRewardPassStatus();
+    }
+  };
+
   const requestPaidReport = async () => {
     if (!reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct) {
       setReportError("가구 유형, 주거 상황, 소득 구간을 선택하고 정보 처리에 동의해 주세요.");
@@ -659,6 +881,19 @@ function App() {
       return;
     }
     let cleanup = () => undefined;
+    let reportTask: Promise<void> | null = null;
+    const beginReportGeneration = (orderId: string) => {
+      if (reportTask) return reportTask;
+      localStorage.setItem(PENDING_REPORT_KEY, orderId);
+      setPendingOrderId(orderId);
+      reportTask = generateReport(orderId)
+        .catch(() => {
+          setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
+          track("welfare_report_generation_failed");
+        })
+        .finally(() => setReportLoading(false));
+      return reportTask;
+    };
     cleanup = IAP.createOneTimePurchaseOrder({
       options: {
         sku: REPORT_SKU,
@@ -673,6 +908,7 @@ function App() {
               body: JSON.stringify({ orderId, sku: REPORT_SKU }),
             });
             if (!response.ok) throw new Error(`GRANT_${response.status}`);
+            void beginReportGeneration(orderId);
             return true;
           } catch {
             setReportError("결제 확인에 실패했어요. 결제 내역은 보존되며 잠시 후 다시 시도할 수 있어요.");
@@ -684,16 +920,7 @@ function App() {
       onEvent: async (event) => {
         cleanup();
         const orderId = event.data.orderId;
-        localStorage.setItem(PENDING_REPORT_KEY, orderId);
-        setPendingOrderId(orderId);
-        try {
-          await generateReport(orderId);
-        } catch {
-          setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
-          track("welfare_report_generation_failed");
-        } finally {
-          setReportLoading(false);
-        }
+        await beginReportGeneration(orderId);
       },
       onError: (reason) => {
         const errorValue = reason as { code?: string; message?: string } | null;
@@ -732,6 +959,8 @@ function App() {
     track(showReportNudge ? "welfare_onboarding_complete" : "welfare_onboarding_skip", { interests: reportProfile.interests.length, step: onboardingStep + 1 });
   };
 
+  const firstReportFree = rewardPassStatus !== "consumed";
+
   return (
     <main className="app-shell">
       {onboardingOpen && <FirstVisitOnboarding step={onboardingStep} total={total} profile={reportProfile} tossProfile={profile} consentedData={consentedData} authLoading={authLoading} authError={authError} setProfile={setReportProfile} onLogin={() => void handleTossLogin(false)} onUserData={() => void handleUserData(false)} onStep={(nextStep) => { track("welfare_onboarding_step", { step: nextStep + 1 }); setOnboardingStep(nextStep); }} onDone={() => finishOnboarding(true)} onSkip={() => finishOnboarding(false)} />}
@@ -767,8 +996,8 @@ function App() {
       {!online && <div className="network-banner" role="status">오프라인 상태예요. 연결되면 다시 시도해 주세요.</div>}
 
       <section className="paid-report-card featured">
-        <div className="report-card-copy"><span className="report-launch-badge">놓치면 아까운 숨은 혜택</span><h2>내 조건에 맞는 지원금,<br />얼마나 놓치고 있을까요?</h2><p>가구·소득·주거·직업을 분석해 나에게 맞는 혜택과 신청 방법을 한눈에 정리해 드려요.</p></div>
-        <button className="report-price-button report-price-button-large" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReport(storedReport?.report || null); setReportOpen(true); }}><small>{storedReport ? "지난 분석 결과" : "AI 숨은 혜택 분석 · 1회"}</small><span>{storedReport ? "내 맞춤 결과 다시 보기" : "내 숨은 복지 혜택 확인하기"}</span>{!storedReport && <em>990원</em>}<b>›</b></button>
+        <div className="report-card-copy"><div className="report-card-top"><span className="report-launch-badge">AI 맞춤 복지 리포트</span>{!storedReport && <strong>{firstReportFree ? "첫 리포트 무료" : "1회 990원"}</strong>}</div><h2>{storedReport ? <>내 맞춤 복지 결과를<br />다시 확인해 보세요</> : <>내가 받을 수 있는 복지 혜택,<br />놓치지 말고 확인해 보세요</>}</h2><p>{storedReport ? "최근 분석한 혜택과 신청 준비사항을 이어서 볼 수 있어요." : "가구·소득·주거 정보를 바탕으로 신청해 볼 만한 혜택과 필요한 서류를 보기 쉽게 정리해 드려요."}</p></div>
+        <button className="report-price-button report-price-button-large" onClick={() => { track("welfare_report_entry_click", { source: "hero" }); setReportCardPage(0); setReport(storedReport?.report || null); setReportOpen(true); }}><small>{storedReport ? "최근 분석 결과가 저장되어 있어요" : firstReportFree ? "광고 한 번 보면 첫 리포트가 무료예요" : "새로운 조건으로 다시 분석해요"}</small><span>{storedReport ? "내 맞춤 결과 다시 보기" : firstReportFree ? "무료로 내 복지 혜택 확인하기" : "내 복지 혜택 다시 찾아보기"}</span><b>›</b></button>
       </section>
 
       <section className="search-panel" aria-label="혜택 검색">
@@ -907,22 +1136,22 @@ function App() {
         <div className="modal-backdrop report-nudge-backdrop" role="presentation" onClick={() => setReportNudgeOpen(false)}>
           <section className="detail-sheet report-nudge-sheet" role="dialog" aria-modal="true" aria-label="맞춤 복지 리포트 안내" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
-            <span className="nudge-badge">무료 조회 완료</span>
+            <span className="nudge-badge">{firstReportFree ? "첫 리포트 무료 혜택" : "무료 조회 완료"}</span>
             <h2>조건상 확인해 볼 혜택이<br /><em>{count.toLocaleString()}개</em> 있어요</h2>
             <p>AI가 실제 신청 가능성을 한 번 더 분석하고, 놓치기 쉬운 혜택부터 순서대로 정리해 드릴게요.</p>
-            <div className="nudge-price"><s>1,990원</s><strong>출시 기념 990원</strong></div>
-            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReport(storedReport?.report || null); setReportOpen(true); }}>AI 상세 분석 990원에 보기</button>
+            <div className="nudge-price"><strong>{firstReportFree ? "광고 하나 보고 첫 리포트를 무료로 받아보세요" : "AI 맞춤 리포트 1회 990원"}</strong></div>
+            <button className="tds-primary-button" onClick={() => { track("welfare_report_entry_click", { source: "lookup_nudge" }); setReportNudgeOpen(false); setReportCardPage(0); setReport(storedReport?.report || null); setReportOpen(true); }}>{firstReportFree ? "무료 리포트 받아보기" : "AI 맞춤 리포트 확인하기"}</button>
             <button className="nudge-later" onClick={() => { track("welfare_report_nudge_dismiss"); setReportNudgeOpen(false); }}>무료 조회 결과 계속 보기</button>
           </section>
         </div>
       )}
       {reportOpen && (
-        <div className="modal-backdrop" role="presentation" onClick={() => !reportLoading && setReportOpen(false)}>
+        <div className="modal-backdrop report-page-backdrop" role="presentation" onClick={() => !reportLoading && setReportOpen(false)}>
           <section className="detail-sheet report-sheet" role="dialog" aria-modal="true" aria-label="맞춤 복지 리포트" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <button className="close-button" aria-label="닫기" disabled={reportLoading} onClick={() => setReportOpen(false)}>×</button>
-            <span className="detail-agency">AI 맞춤 복지 카드 · 1회 이용권</span>
-            <h2>신청에 필요한 정보만<br />카드로 쉽게 확인해요</h2>
+            <span className="detail-agency">나에게 맞는 복지 혜택 찾기</span>
+            <h2>{report ? <>신청에 필요한 정보만<br />카드로 쉽게 확인해요</> : <>더 잘 맞는 복지정보를 찾으려면<br />몇 가지 정보가 필요해요</>}</h2>
             {report ? (
               <div className="report-result">
                 {storedReport && <div className="report-saved-at">최근 결과 · {new Date(storedReport.createdAt).toLocaleDateString("ko-KR")}</div>}
@@ -930,8 +1159,9 @@ function App() {
                 <div className="report-quick-summary"><b>한눈에 보는 분석</b><p>{report.executiveSummary}</p><small>{report.priorityStrategy}</small></div>
                 <div className="report-profile-chips">{report.profileAnalysis.map((item) => <span key={item.label}><b>{item.label}</b>{item.assessment}</span>)}</div>
                 <h4 className="report-policy-heading">내게 맞는 복지 카드 {report.recommendations.length}개</h4>
-                {report.recommendations.map((item, index) => <article className="report-policy" key={`${item.policyId}-${index}`}>
-                  <div className="report-policy-top"><span>{index + 1}순위</span><em className={`fit-${item.fit === "높음" ? "high" : item.fit === "낮음" ? "low" : "check"}`}>{item.fit}</em></div>
+                {report.recommendations.slice(reportCardPage, reportCardPage + 1).map((item) => <article className="report-policy report-policy-page" key={`${item.policyId}-${reportCardPage}`}>
+                  <div className="report-policy-page-count">맞춤 혜택 {reportCardPage + 1} / {report.recommendations.length}</div>
+                  <div className="report-policy-top"><span>{reportCardPage + 1}순위</span><em className={`fit-${item.fit === "높음" ? "high" : item.fit === "낮음" ? "low" : "check"}`}>{item.fit}</em></div>
                   <h4>{item.title}</h4><small>{item.agency}</small>
                   <p className="report-fit-reason">{item.fitReason}</p>
                   <ReportMini icon="₩" title="받을 수 있는 혜택" text={item.benefitEstimate} />
@@ -942,27 +1172,40 @@ function App() {
                   <div className="report-card-meta"><ReportMini icon="◷" title="신청기한" text={item.deadline} /><ReportMini icon="!" title="주의사항" text={item.risks.join(" · ")} warning /></div>
                   <button onClick={() => setExternalTarget(item.url)}>신청 페이지·공식 안내 열기 <b>›</b></button>
                 </article>)}
+                {report.recommendations.length > 1 && <div className="report-card-pagination"><button type="button" disabled={reportCardPage === 0} onClick={() => setReportCardPage((page) => Math.max(0, page - 1))}>이전 혜택</button><button type="button" disabled={reportCardPage >= report.recommendations.length - 1} onClick={() => setReportCardPage((page) => Math.min(report.recommendations.length - 1, page + 1))}>다음 혜택</button></div>}
+                <Suspense fallback={null}><TossBannerAd placement={`welfare_report_policy_${reportCardPage + 1}`} /></Suspense>
                 <ReportSection title="오늘부터 할 일"><ol>{report.actionPlan.map((item) => <li key={item}>{item}</li>)}</ol></ReportSection>
                 <ReportSection title="꼭 확인해 주세요" warning><ul>{report.generalCautions.map((item) => <li key={item}>{item}</li>)}</ul></ReportSection>
                 <p className="report-disclaimer">AI가 공개 정보를 바탕으로 만든 참고 자료예요. 실제 자격과 신청 조건은 기관에서 최종 확인해 주세요.</p>
+                <button className="tds-primary-button" onClick={() => { setReport(null); setReportStep(0); setReportCardPage(0); setReportError(""); track("welfare_report_new_request"); }}>{rewardPassStatus === "consumed" ? "새 조건으로 다시 분석하기 · 990원" : "새 조건으로 리포트 만들기"}</button>
               </div>
             ) : (
-              <>
-                <p className="report-intro">정확한 추천을 위해 몇 가지만 알려주세요. 이름·전화번호·상세주소는 AI에 보내지 않아요.</p>
-                <ReportChoice title="가구 유형" required options={HOUSEHOLDS} value={reportProfile.household} onChange={(value) => setReportProfile((current) => ({ ...current, household: value }))} />
-                <ReportChoice title="주거 상황" required options={HOUSINGS} value={reportProfile.housing} onChange={(value) => setReportProfile((current) => ({ ...current, housing: value }))} />
-                <div className="report-question"><strong>경제활동 상태 <small>복수 선택</small></strong><div className="report-chips">{STATUSES.map(([value, label]) => <button type="button" key={value} className={reportProfile.statuses.includes(value) ? "active" : ""} onClick={() => setReportProfile((current) => ({ ...current, statuses: current.statuses.includes(value) ? current.statuses.filter((item) => item !== value) : [...current.statuses, value] }))}>{label}</button>)}</div></div>
-                <label className="report-select"><span>가구 기준 중위소득 구간 <b>*</b></span><select value={reportProfile.incomePct} onChange={(event) => setReportProfile((current) => ({ ...current, incomePct: event.target.value }))}><option value="">선택해 주세요</option><option value="50">50% 이하</option><option value="75">75% 이하</option><option value="100">100% 이하</option><option value="150">150% 이하</option><option value="250">250% 이하</option><option value="999">해당 없음·모름</option></select><small>정확하지 않아도 가장 가까운 구간을 선택하세요.</small></label>
-                <div className="report-two-columns"><label className="report-select"><span>자녀 수</span><select value={reportProfile.childrenCount} onChange={(event) => setReportProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option key={count} value={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label className="report-select"><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={reportProfile.childrenCount === "0"} value={reportProfile.youngestChildAge} onChange={(event) => setReportProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label></div>
-                <div className="report-flags"><label><input type="checkbox" checked={reportProfile.pregnant} onChange={(event) => setReportProfile((current) => ({ ...current, pregnant: event.target.checked }))} /> 임신 중이에요</label><label><input type="checkbox" checked={reportProfile.hasDisability} onChange={(event) => setReportProfile((current) => ({ ...current, hasDisability: event.target.checked }))} /> 등록 장애인이에요</label></div>
-                <label className="report-field"><span>현재 상황을 자세히 알려주세요 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 경기도에서 혼자 월세로 살고 있는 취업준비생이에요. 생활비와 취업교육비가 부담되고, 신청할 수 있는 청년 지원과 준비서류를 알고 싶어요." /><small>토스에서 불러온 나이·지역은 다시 적지 않아도 돼요. 소득 변화, 부채, 실직, 돌봄 등 특별한 상황을 적으면 더 정확해져요. · {reportDetails.length}/700</small></label>
-                <label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>리포트 생성을 위해 입력한 정보가 OpenAI API로 전송되는 것에 동의해요. 생성 후 별도로 저장하지 않아요.</span></label>
-                {reportError && <p className="report-error" role="alert">{reportError}</p>}
-                <div className="report-price-summary"><span>단건 결제</span><strong>출시 기념가 990원</strong></div>
-                {pendingOrderId ? <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void retryPendingReport()}>{reportLoading ? "리포트 만드는 중…" : "추가 결제 없이 리포트 다시 만들기"}</button> : <button className="tds-primary-button" disabled={reportLoading || !reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct} onClick={() => void requestPaidReport()}>{reportLoading ? "결제 및 분석 중…" : "990원 결제하고 전체 리포트 보기"}</button>}
-                <p className="payment-note">실제 결제금액 990원 · 단건 결제 상품이에요. 생성에 실패하면 추가 결제 없이 다시 시도할 수 있어요.</p>
-              </>
+              <div className="report-wizard">
+                <div className="report-progress"><span style={{ width: `${((reportStep + 1) / 8) * 100}%` }} /></div>
+                <small className="report-step-label">{reportStep + 1} / 8</small>
+                {reportStep === 0 && <><h3>가구 형태를 알려주세요</h3><p>가구 유형에 따라 받을 수 있는 지원이 달라서, 내게 맞는 혜택을 찾는 데 필요해요.</p><ReportChoice title="가구 유형" required options={HOUSEHOLDS} value={reportProfile.household} onChange={(value) => setReportProfile((current) => ({ ...current, household: value }))} /></>}
+                {reportStep === 1 && <><h3>현재 주거 상황을 알려주세요</h3><p>월세·전세 지원처럼 지금 살고 있는 환경에 맞는 주거 혜택을 찾아볼게요.</p><ReportChoice title="주거 상황" required options={HOUSINGS} value={reportProfile.housing} onChange={(value) => setReportProfile((current) => ({ ...current, housing: value }))} /></>}
+                {reportStep === 2 && <><h3>현재 경제활동 상태를 알려주세요</h3><p>취업·재직·창업 등 상황에 맞는 지원을 빠뜨리지 않기 위한 질문이에요. 여러 개를 골라도 돼요.</p><div className="report-question"><strong>경제활동 상태 <small>복수 선택</small></strong><div className="report-chips">{STATUSES.map(([value, label]) => <button type="button" key={value} className={reportProfile.statuses.includes(value) ? "active" : ""} onClick={() => setReportProfile((current) => ({ ...current, statuses: current.statuses.includes(value) ? current.statuses.filter((item) => item !== value) : [...current.statuses, value] }))}>{label}</button>)}</div></div></>}
+                {reportStep === 3 && <><h3>가구 소득과 가까운 구간을 골라주세요</h3><p>소득 기준이 있는 복지 혜택을 더 정확하게 걸러내기 위해 필요해요. 정확히 몰라도 괜찮아요.</p><label className="report-select"><span>가구 기준 중위소득 구간 <b>*</b></span><select value={reportProfile.incomePct} onChange={(event) => setReportProfile((current) => ({ ...current, incomePct: event.target.value }))}><option value="">선택해 주세요</option><option value="50">50% 이하</option><option value="75">75% 이하</option><option value="100">100% 이하</option><option value="150">150% 이하</option><option value="250">250% 이하</option><option value="999">해당 없음·모름</option></select></label></>}
+                {reportStep === 4 && <><h3>자녀 정보를 알려주세요</h3><p>자녀 수와 나이에 맞는 출산·보육·교육 혜택을 함께 찾아드릴게요.</p><div className="report-two-columns"><label className="report-select"><span>자녀 수</span><select value={reportProfile.childrenCount} onChange={(event) => setReportProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option key={count} value={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label className="report-select"><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={reportProfile.childrenCount === "0"} value={reportProfile.youngestChildAge} onChange={(event) => setReportProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label></div></>}
+                {reportStep === 5 && <><h3>추가로 해당하는 상황이 있나요?</h3><p>임신·장애 관련 지원까지 놓치지 않도록 필요한 항목만 선택해 주세요.</p><div className="report-flags"><label><input type="checkbox" checked={reportProfile.pregnant} onChange={(event) => setReportProfile((current) => ({ ...current, pregnant: event.target.checked }))} /> 임신 중이에요</label><label><input type="checkbox" checked={reportProfile.hasDisability} onChange={(event) => setReportProfile((current) => ({ ...current, hasDisability: event.target.checked }))} /> 등록 장애인이에요</label></div></>}
+                {reportStep === 6 && <><h3>지금 가장 필요한 도움을 들려주세요</h3><p>선택지만으로 알기 어려운 상황을 적어주시면, 내게 더 잘 맞는 복지정보를 꼼꼼하게 찾아볼게요.</p><label className="report-field"><span>현재 상황을 자세히 알려주세요 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 경기도에서 혼자 월세로 살고 있는 취업준비생이에요. 생활비와 취업교육비가 부담되고, 신청할 수 있는 청년 지원과 준비서류를 알고 싶어요." /><small>토스에서 불러온 나이·지역은 다시 적지 않아도 돼요. · {reportDetails.length}/700</small></label><label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>더 잘 맞는 복지정보를 찾기 위해 입력한 내용이 AI 분석에 사용되는 것에 동의해요. 이름·전화번호·상세주소는 보내지 않고, 입력 내용은 별도로 저장하지 않아요.</span></label></>}
+                {reportStep === 7 && <><h3>내게 맞는 복지정보를 찾을 준비가 됐어요</h3><p>알려주신 내용을 바탕으로 신청 가능성이 높은 혜택과 필요한 서류를 보기 쉽게 정리해 드릴게요.</p>{reportError && <p className="report-error" role="alert">{reportError}</p>}<div className="report-price-summary"><span>{firstReportFree ? "처음 한 번은 무료예요" : "두 번째부터"}</span><strong>{firstReportFree ? "리워드 광고 1회 시청 후 무료" : "1회 990원"}</strong></div>{pendingOrderId ? <button className="tds-primary-button" disabled={reportLoading} onClick={() => void retryPendingReport()}>{reportLoading ? "나에게 맞는 복지정보를 다시 찾고 있어요…" : "추가 결제·광고 없이 다시 찾아보기"}</button> : !profile ? <button className="tds-primary-button" disabled={authLoading} onClick={() => void handleTossLogin(false)}>{authLoading ? "내 정보를 안전하게 확인하고 있어요…" : "로그인하고 무료 리포트 받기"}</button> : rewardPassStatus === "available" || rewardPassStatus === "issued" ? <button className="tds-primary-button" disabled={reportLoading || (rewardPassStatus === "available" && !rewardAdReady)} onClick={() => void requestRewardedReport()}>{reportLoading ? "나에게 꼭 맞는 복지정보를 찾고 있어요…" : rewardPassStatus === "issued" ? "무료 이용권으로 내 혜택 찾기" : rewardAdReady ? "광고 보고 무료 리포트 받기" : "무료 광고를 준비하고 있어요…"}</button> : rewardPassStatus === "consumed" ? <button className="tds-primary-button" disabled={reportLoading} onClick={() => void requestPaidReport()}>{reportLoading ? "내 조건에 맞는 혜택을 꼼꼼히 찾고 있어요…" : "990원 결제하고 새 리포트 보기"}</button> : <button className="tds-primary-button" disabled={rewardPassStatus === "loading"} onClick={() => void loadRewardPassStatus()}>{rewardPassStatus === "loading" ? "첫 무료 혜택을 확인하고 있어요…" : "무료 혜택 다시 확인하기"}</button>}<p className="payment-note">{firstReportFree ? "광고를 끝까지 보면 무료 이용권을 드려요." : "리포트 생성에 실패하면 추가 결제 없이 다시 시도할 수 있어요."}</p></>}
+                <div className="report-wizard-nav">{reportStep > 0 && <button type="button" onClick={() => setReportStep((step) => step - 1)}>이전</button>}{reportStep < 7 && <button type="button" className="next" disabled={(reportStep === 0 && !reportProfile.household) || (reportStep === 1 && !reportProfile.housing) || (reportStep === 3 && !reportProfile.incomePct) || (reportStep === 6 && !reportConsent)} onClick={() => setReportStep((step) => step + 1)}>다음</button>}</div>
+              </div>
             )}
+          </section>
+        </div>
+      )}
+      {rewardGrantedOpen && rewardPassStatus === "issued" && (
+        <div className="modal-backdrop reward-pass-backdrop" role="presentation" onClick={() => setRewardGrantedOpen(false)}>
+          <section className="reward-pass-popup" role="dialog" aria-modal="true" aria-label="무료 이용권 지급 완료" onClick={(event) => event.stopPropagation()}>
+            <div className="reward-pass-icon" aria-hidden="true">✓</div>
+            <span>첫 리포트 무료 혜택</span>
+            <h2>무료 이용권을 받았어요!</h2>
+            <p>광고를 끝까지 봐주셔서 감사해요.<br />나에게 맞는 복지혜택을 지금 확인해 보세요.</p>
+            <button className="reward-pass-cta" disabled={reportLoading} onClick={() => { setRewardGrantedOpen(false); void requestRewardedReport(); }}>{reportLoading ? "나에게 맞는 복지정보를 찾고 있어요…" : "무료 이용권으로 내 복지혜택 확인하기"}<b>›</b></button>
+            <button className="reward-pass-later" onClick={() => setRewardGrantedOpen(false)}>나중에 확인할게요</button>
           </section>
         </div>
       )}
@@ -1088,7 +1331,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
     <div className="onboarding-bottom">
       {/* 1~9단계 모두 동일한 승인 배너 광고 그룹을 하단에 노출한다. */}
       <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd placement={`onboarding_${step + 1}`} /></Suspense>
-      <button className="onboarding-next" disabled={!canContinue || resultAdShowing} onClick={next}>{step === steps.length - 1 ? resultAdShowing ? "결과를 준비하고 있어요…" : "광고 보고 맞춤 혜택 보기" : "다음"}</button>
+      <button className="onboarding-next" disabled={!canContinue || resultAdShowing} onClick={next}>{step === steps.length - 1 ? resultAdShowing ? "나에게 맞는 혜택을 찾고 있어요…" : "광고 보고 맞춤 혜택 보기" : "다음"}</button>
     </div>
   </div>;
 }
@@ -1123,7 +1366,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
             <DetailBlock title="기기에 저장되는 정보" text="저장한 혜택 목록은 앱인토스 기기 저장소에만 보관돼요. 운영자는 이 값을 확인할 수 없으며, 미니앱 데이터를 삭제하면 함께 지워져요." />
             <DetailBlock title="서버에서 처리되는 정보" text="정책 조회 과정의 접속 기록과, 토스 로그인 시 사용자가 동의한 식별키·프로필 정보를 로그인 및 맞춤 안내 목적으로 처리해요. 유저정보 불러오기 결과는 현재 화면에만 표시하고 서버에 저장하지 않아요." />
             <DetailBlock title="외부 서비스" text="정책 데이터 제공과 호스팅을 위해 Vercel 서버와 통신해요. 공식 신청 버튼을 누른 경우 선택한 공공기관 페이지로 이동해요." />
-            <DetailBlock title="유료 AI 리포트" text="사용자가 별도로 동의하고 입력한 상황, 나이·지역·성별·내외국인 조건은 맞춤 복지 리포트 생성을 위해 OpenAI API로 전송돼요. 이름·전화번호·주소는 전송하지 않으며, 서비스 데이터베이스에 리포트 입력값과 결과를 별도로 저장하지 않아요." />
+            <DetailBlock title="AI 맞춤 복지 리포트" text="사용자가 별도로 동의하고 입력한 상황, 나이·지역·성별·내외국인 조건은 맞춤 복지 리포트 생성을 위해 OpenAI API로 전송돼요. 이름·전화번호·주소는 전송하지 않으며, 서비스 데이터베이스에 리포트 입력값과 결과를 별도로 저장하지 않아요." />
             <DetailBlock title="문의" text="개인정보 관련 문의: fogtemplar@gmail.com" />
           </>
         ) : (
@@ -1131,7 +1374,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
             <DetailBlock title="서비스 성격" text="나라가쏜다는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
             <DetailBlock title="정보 확인" text="공공기관의 변경 사항이 반영되기까지 시차가 있을 수 있어요. 신청 조건, 금액, 마감일은 반드시 공식 기관 페이지에서 최종 확인해 주세요." />
             <DetailBlock title="외부 페이지" text="공식 기관 페이지를 열면 해당 기관의 이용약관과 개인정보처리방침이 적용돼요." />
-            <DetailBlock title="유료 서비스" text="맞춤 복지 리포트는 정상가 1,990원, 출시 기념가 990원의 1회 소비성 인앱결제 상품이에요. 결제 완료 후 리포트 생성에 실패하면 상품 지급이 완료되지 않도록 처리하며, 결제·환불은 앱 마켓 및 앱인토스 정책을 따라요." />
+            <DetailBlock title="리포트 이용 방법" text="첫 맞춤 복지 리포트는 리워드 광고를 끝까지 시청하면 무료 이용권으로 만들 수 있어요. 첫 무료 이용권을 사용한 뒤에는 새 리포트마다 990원의 1회 소비성 인앱결제가 필요해요. 생성에 실패한 이용권이나 결제 건은 추가 광고 또는 추가 결제 없이 다시 시도할 수 있으며, 결제·환불은 앱 마켓 및 앱인토스 정책을 따라요." />
             <DetailBlock title="문의" text="서비스 문의: fogtemplar@gmail.com" />
           </>
         )}
