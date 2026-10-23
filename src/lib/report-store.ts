@@ -69,19 +69,3 @@ export async function getLatestUserReport(userKey: number) {
   const result = await command(["GET", `welfare:report:user:${userKey}:latest`]);
   return typeof result === "string" ? open(result) : null;
 }
-
-export async function savePendingRewardReport(userKey: number, challenge: string, report: unknown) {
-  if (!config()) return false;
-  const encoded = seal({ orderId: `pending:${challenge}`, createdAt: new Date().toISOString(), report });
-  await command(["SET", `welfare:report:pending:${userKey}:${challenge}`, encoded, "EX", 30 * 60]);
-  return true;
-}
-
-export async function getPendingRewardReport(userKey: number, challenge: string) {
-  const result = await command(["GET", `welfare:report:pending:${userKey}:${challenge}`]);
-  return typeof result === "string" ? open(result) : null;
-}
-
-export async function deletePendingRewardReport(userKey: number, challenge: string) {
-  await command(["DEL", `welfare:report:pending:${userKey}:${challenge}`]);
-}

@@ -262,16 +262,6 @@ footer button { padding: 0; border: 0; background: none; color: #6b7684; font-si
 .report-policy > button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 46px; margin-top: 13px; padding: 0 13px; border: 0; border-radius: 12px; background: #eaf3ff; color: #1b64da; font-size: 12px; font-weight: 750; }
 .report-policy > button b { font-size: 18px; }
 .report-nudge-backdrop { z-index: 120; }
-.reward-pass-backdrop { z-index: 170; align-items: center; padding: 20px; }
-.reward-pass-popup { width: min(100%,420px); padding: 28px 22px 18px; border-radius: 26px; background: #fff; text-align: center; box-shadow: 0 20px 55px rgba(0,27,55,.28); }
-.reward-pass-icon { display: grid; place-items: center; width: 62px; height: 62px; margin: 0 auto 14px; border-radius: 50%; background: linear-gradient(145deg,#3182f6,#1b64da); color: #fff; font-size: 30px; font-weight: 850; box-shadow: 0 10px 24px rgba(49,130,246,.28); }
-.reward-pass-popup > span { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: #eaf3ff; color: #1b64da; font-size: 11px; font-weight: 800; }
-.reward-pass-popup h2 { margin: 13px 0 8px; color: #191f28; font-size: 25px; letter-spacing: -.7px; }
-.reward-pass-popup p { margin: 0 0 22px; color: #6b7684; font-size: 13px; line-height: 1.65; }
-.reward-pass-cta { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; min-height: 62px; padding: 0 15px 0 18px; border: 0; border-radius: 17px; background: #3182f6; color: #fff; font-size: 15px; font-weight: 850; text-align: left; box-shadow: 0 9px 22px rgba(49,130,246,.24); }
-.reward-pass-cta b { font-size: 25px; font-weight: 500; }
-.reward-pass-cta:disabled { opacity: .55; }
-.reward-pass-later { width: 100%; min-height: 46px; border: 0; background: transparent; color: #8b95a1; font-size: 12px; font-weight: 650; }
 .report-nudge-sheet { text-align: center; }
 .nudge-badge { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: #eaf3ff; color: #1b64da; font-size: 11px; font-weight: 750; }
 .report-nudge-sheet > h2 { margin: 14px 0 9px; font-size: 24px; }
