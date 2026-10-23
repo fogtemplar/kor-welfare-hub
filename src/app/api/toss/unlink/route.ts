@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { deleteUserReport, markTossUserRevoked } from "@/lib/report-store";
 
 /**
  * 토스 로그인 — 연결 끊기 콜백
@@ -100,19 +101,12 @@ function redact(v: unknown): string {
   return `${s.slice(0, 3)}…${s.slice(-2)} (len=${s.length})`;
 }
 
-/**
- * 회원 데이터 파기.
- *
- * 지금은 서버에 저장하는 회원 데이터가 없어서(민감정보는 기기에만 보관,
- * 토스 로그인 미연동) 실제 삭제 대상이 없다. 알림 구독 테이블을 만든 뒤
- * 여기에 삭제 로직을 채운다.
- */
 async function purgeMember(identifier: string): Promise<{ deleted: number }> {
-  // TODO(알림 기능 구현 시): 아래를 실제 삭제로 교체
-  //   await db.notificationSubscriptions.deleteMany({ where: { memberKey: identifier } });
-  //   await db.members.delete({ where: { key: identifier } });
-  void identifier;
-  return { deleted: 0 };
+  const userKey = Number(identifier);
+  if (!Number.isSafeInteger(userKey) || userKey <= 0) return { deleted: 0 };
+  await deleteUserReport(userKey);
+  await markTossUserRevoked(userKey);
+  return { deleted: 1 };
 }
 
 async function handle(req: Request) {

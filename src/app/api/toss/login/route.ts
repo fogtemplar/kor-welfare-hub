@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { decryptTossProfile, generateTossTokens, getTossProfile } from "@/lib/toss-login";
+import { clearTossUserRevoked } from "@/lib/report-store";
 import { makeSession, sealSession, sessionCookieOptions, TOSS_SESSION_COOKIE } from "@/lib/toss-session";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
     }
     const tokens = await generateTossTokens(body.authorizationCode, body.referrer as "DEFAULT" | "SANDBOX");
     const profile = decryptTossProfile(await getTossProfile(tokens.accessToken));
+    await clearTossUserRevoked(profile.userKey);
     const response = NextResponse.json({ profile });
     response.cookies.set(TOSS_SESSION_COOKIE, sealSession(makeSession(profile, tokens)), sessionCookieOptions);
     return response;

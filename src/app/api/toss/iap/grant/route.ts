@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTossIapOrderStatus } from "@/lib/toss-login";
+import { isTossUserRevoked } from "@/lib/report-store";
 import { openSession, TOSS_SESSION_COOKIE } from "@/lib/toss-session";
 
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ export async function POST(request: NextRequest) {
 
   const session = openSession(request.cookies.get(TOSS_SESSION_COOKIE)?.value || "");
   if (!session) return NextResponse.json({ error: "TOSS_LOGIN_REQUIRED" }, { status: 401 });
+  if (await isTossUserRevoked(session.profile.userKey)) return NextResponse.json({ error: "TOSS_CONNECTION_REVOKED" }, { status: 401 });
 
   try {
     const order = await getTossIapOrderStatus(orderId, session.profile.userKey);

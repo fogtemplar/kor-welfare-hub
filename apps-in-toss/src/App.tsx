@@ -15,7 +15,9 @@ const ONBOARDING_KEY = "kor-welfare-hub:ait:onboarding:v1";
 const PROFILE_KEY = "kor-welfare-hub:ait:report-profile:v1";
 const USER_DATA_KEY = import.meta.env.VITE_TOSS_USER_DATA_KEY?.trim() || "cud_61f829e0613c4f1296aa2d8386f7d34d";
 const REPORT_SKU = import.meta.env.VITE_TOSS_REPORT_SKU?.trim() || "ait.0000037018.4b1ec874.bbc410aefe.5308190597";
-const RESULT_AD_GROUP_ID = import.meta.env.VITE_TOSS_RESULT_AD_GROUP_ID?.trim() || "ait.v2.live.d262e086d3144d18";
+const RESULT_AD_GROUP_ID = import.meta.env.PROD
+  ? import.meta.env.VITE_TOSS_RESULT_AD_GROUP_ID?.trim() || "ait.v2.live.d262e086d3144d18"
+  : import.meta.env.VITE_TOSS_TEST_RESULT_AD_GROUP_ID?.trim() || "ait.dev.43daa14da3ae487b";
 
 type WelfareReport = {
   title: string;
@@ -64,7 +66,7 @@ type TossProfile = {
   email?: string | null;
 };
 
-type ConsentedData = Partial<Record<"USER_NAME" | "USER_GENDER" | "USER_NATIONALITY" | "USER_BIRTHDAY" | "USER_PHONE" | "USER_ADDRESS" | "USER_EMAIL", string>>;
+type ConsentedData = Partial<Record<"USER_GENDER" | "USER_NATIONALITY" | "USER_BIRTHDAY" | "USER_ADDRESS", string>>;
 
 type Policy = {
   id: string;
@@ -206,6 +208,7 @@ function App() {
   const [report, setReport] = useState<WelfareReport | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [reportConsent, setReportConsent] = useState(false);
+  const [overseasConsent, setOverseasConsent] = useState(false);
   const [reportProfile, setReportProfile] = useState<ReportProfile>(EMPTY_REPORT_PROFILE);
   const [reportNudgeOpen, setReportNudgeOpen] = useState(false);
   const [reportNudgePending, setReportNudgePending] = useState(false);
@@ -272,6 +275,7 @@ function App() {
       // 손상된 로컬 데이터는 무시하고 새로 시작해요.
     }
     track("welfare_home_view");
+    if (!IAP.getPendingOrders.isSupported()) return;
     IAP.getPendingOrders().then((result) => {
       const pending = result?.orders.find((order) => order.sku === REPORT_SKU);
       if (pending) {
@@ -533,10 +537,19 @@ function App() {
 
   const retryPendingReport = async () => {
     if (!pendingOrderId) return;
+    const recoveringOrderId = pendingOrderId;
     setReportLoading(true);
     setReportError("");
     try {
-      await generateReport(pendingOrderId);
+      await generateReport(recoveringOrderId);
+      if (IAP.completeProductGrant.isSupported()) {
+        const completed = await IAP.completeProductGrant({ params: { orderId: recoveringOrderId } });
+        if (!completed) {
+          localStorage.setItem(PENDING_REPORT_KEY, recoveringOrderId);
+          setPendingOrderId(recoveringOrderId);
+          setReportError("리포트는 준비됐지만 구매 완료 확인이 지연되고 있어요. 다음 접속 때 자동으로 다시 확인할게요.");
+        }
+      }
     } catch {
       setReportError("리포트 생성에 다시 실패했어요. 입력 정보와 인터넷 연결을 확인한 뒤 재시도해 주세요.");
     } finally {
@@ -591,6 +604,9 @@ function App() {
     setAuthLoading(true);
     setAuthError("");
     try {
+      if (!User.getConsentedData.isSupported()) {
+        throw new Error("unsupported_toss_version");
+      }
       const data = await User.getConsentedData({ consentedUserDataKey: USER_DATA_KEY, shouldRequestAgreementWhenUserDeclined: true });
       const next = (data || null) as ConsentedData | null;
       setConsentedData(next);
@@ -611,6 +627,8 @@ function App() {
       const message = reason instanceof Error ? reason.message.toLowerCase() : "";
       if (message.includes("declin") || message.includes("cancel") || message.includes("denied")) {
         setAuthError("정보 제공에 동의하지 않았어요. 검색 조건을 직접 선택해도 모든 혜택을 확인할 수 있어요.");
+      } else if (message.includes("unsupported")) {
+        setAuthError("이 기능을 사용하려면 토스 앱을 최신 버전으로 업데이트해 주세요.");
       } else if (!navigator.onLine || message.includes("fetch") || message.includes("network")) {
         setAuthError("인터넷 연결이 불안정해 정보를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.");
       } else {
@@ -628,6 +646,13 @@ function App() {
     } finally {
       setProfile(null);
       setConsentedData(null);
+      setStoredReport(null);
+      setPendingOrderId("");
+      setReport(null);
+      setReportProfile(EMPTY_REPORT_PROFILE);
+      localStorage.removeItem(REPORT_KEY);
+      localStorage.removeItem(PENDING_REPORT_KEY);
+      localStorage.removeItem(PROFILE_KEY);
       setAccountOpen(false);
       setAuthLoading(false);
     }
@@ -643,14 +668,19 @@ function App() {
   };
 
   const requestPaidReport = async () => {
-    if (!reportConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct) {
-      setReportError("가구 유형, 주거 상황, 소득 구간을 선택하고 정보 처리에 동의해 주세요.");
+    if (!reportConsent || !overseasConsent || !reportProfile.household || !reportProfile.housing || !reportProfile.incomePct) {
+      setReportError("필수 조건을 선택하고 민감정보 처리와 국외 이전에 동의해 주세요.");
       return;
     }
     setReportLoading(true);
     setReportError("");
     track("welfare_report_payment_start");
     try {
+      if (!IAP.getProductItemList.isSupported() || !IAP.createOneTimePurchaseOrder.isSupported()) {
+        setReportError("결제 기능을 사용하려면 토스 앱을 최신 버전으로 업데이트해 주세요.");
+        setReportLoading(false);
+        return;
+      }
       const catalog = await IAP.getProductItemList();
       const product = catalog?.products.find((item) => item.sku === REPORT_SKU);
       if (!product) {
@@ -674,12 +704,7 @@ function App() {
       if (reportTask) return reportTask;
       localStorage.setItem(PENDING_REPORT_KEY, orderId);
       setPendingOrderId(orderId);
-      reportTask = generateReport(orderId)
-        .catch(() => {
-          setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
-          track("welfare_report_generation_failed");
-        })
-        .finally(() => setReportLoading(false));
+      reportTask = generateReport(orderId);
       return reportTask;
     };
     cleanup = IAP.createOneTimePurchaseOrder({
@@ -696,19 +721,31 @@ function App() {
               body: JSON.stringify({ orderId, sku: REPORT_SKU }),
             });
             if (!response.ok) throw new Error(`GRANT_${response.status}`);
-            void beginReportGeneration(orderId);
+            await beginReportGeneration(orderId);
             return true;
-          } catch {
-            setReportError("결제 확인에 실패했어요. 결제 내역은 보존되며 잠시 후 다시 시도할 수 있어요.");
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "";
+            setReportError(message.startsWith("GRANT_")
+              ? "결제 확인에 실패했어요. 결제 내역은 보존되며 잠시 후 다시 시도할 수 있어요."
+              : "결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
             track("welfare_report_grant_failed");
             return false;
+          } finally {
+            setReportLoading(false);
           }
         },
       },
       onEvent: async (event) => {
         cleanup();
         const orderId = event.data.orderId;
-        await beginReportGeneration(orderId);
+        try {
+          await beginReportGeneration(orderId);
+        } catch {
+          setReportError("결제는 완료됐어요. 아래 ‘리포트 다시 만들기’를 누르면 추가 결제 없이 재시도할 수 있어요.");
+          track("welfare_report_generation_failed");
+        } finally {
+          setReportLoading(false);
+        }
       },
       onError: (reason) => {
         const errorValue = reason as { code?: string; message?: string } | null;
@@ -840,7 +877,7 @@ function App() {
         <section className="policy-list">
           {visibleItems.map((policy, index) => (
             <Suspense key={policy.id} fallback={null}>
-            {index === 9 && !savedOnly && <TossBannerAd />}
+            {index === 9 && !savedOnly && !selected && !legal && !accountOpen && !reportNudgeOpen && !reportOpen && !externalTarget && <TossBannerAd placement="policy_list" />}
             <article className="policy-card">
               <div className="card-topline">
                 <div className="policy-badges"><span>{policy.region || (policy.level === "national" ? "전국" : "지역")}</span><DeadlineBadge policy={policy} /></div>
@@ -906,7 +943,7 @@ function App() {
           <section className="detail-sheet account-sheet" role="dialog" aria-modal="true" aria-label="내 정보" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <button className="close-button" aria-label="닫기" onClick={() => setAccountOpen(false)}>×</button>
-            <h2>{profile?.name || consentedData?.USER_NAME || "토스 사용자"}님</h2>
+            <h2>{profile?.name || "토스 사용자"}님</h2>
             <p className="account-description">동의한 정보만 표시하며, 유저정보 불러오기 결과는 서버에 저장하지 않아요.</p>
             <div className="profile-grid">
               {(consentedData?.USER_BIRTHDAY || profile?.birthday) && <ProfileItem label="생년월일" value={consentedData?.USER_BIRTHDAY || profile?.birthday || ""} />}
@@ -975,9 +1012,9 @@ function App() {
                 {reportStep === 3 && <><h3>가구 소득과 가까운 구간을 골라주세요</h3><p>소득 기준이 있는 복지 혜택을 더 정확하게 걸러내기 위해 필요해요. 정확히 몰라도 괜찮아요.</p><label className="report-select"><span>가구 기준 중위소득 구간 <b>*</b></span><select value={reportProfile.incomePct} onChange={(event) => setReportProfile((current) => ({ ...current, incomePct: event.target.value }))}><option value="">선택해 주세요</option><option value="50">50% 이하</option><option value="75">75% 이하</option><option value="100">100% 이하</option><option value="150">150% 이하</option><option value="250">250% 이하</option><option value="999">해당 없음·모름</option></select></label></>}
                 {reportStep === 4 && <><h3>자녀 정보를 알려주세요</h3><p>자녀 수와 나이에 맞는 출산·보육·교육 혜택을 함께 찾아드릴게요.</p><div className="report-two-columns"><label className="report-select"><span>자녀 수</span><select value={reportProfile.childrenCount} onChange={(event) => setReportProfile((current) => ({ ...current, childrenCount: event.target.value, youngestChildAge: event.target.value === "0" ? "" : current.youngestChildAge }))}>{[0,1,2,3,4].map((count) => <option key={count} value={count}>{count}명{count === 4 ? " 이상" : ""}</option>)}</select></label><label className="report-select"><span>막내 만 나이</span><input type="number" min="0" max="25" disabled={reportProfile.childrenCount === "0"} value={reportProfile.youngestChildAge} onChange={(event) => setReportProfile((current) => ({ ...current, youngestChildAge: event.target.value }))} placeholder="예: 2" /></label></div></>}
                 {reportStep === 5 && <><h3>추가로 해당하는 상황이 있나요?</h3><p>임신·장애 관련 지원까지 놓치지 않도록 필요한 항목만 선택해 주세요.</p><div className="report-flags"><label><input type="checkbox" checked={reportProfile.pregnant} onChange={(event) => setReportProfile((current) => ({ ...current, pregnant: event.target.checked }))} /> 임신 중이에요</label><label><input type="checkbox" checked={reportProfile.hasDisability} onChange={(event) => setReportProfile((current) => ({ ...current, hasDisability: event.target.checked }))} /> 등록 장애인이에요</label></div></>}
-                {reportStep === 6 && <><h3>지금 가장 필요한 도움을 들려주세요</h3><p>선택지만으로 알기 어려운 상황을 적어주시면, 내게 더 잘 맞는 복지정보를 꼼꼼하게 찾아볼게요.</p><label className="report-field"><span>현재 상황을 자세히 알려주세요 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 경기도에서 혼자 월세로 살고 있는 취업준비생이에요. 생활비와 취업교육비가 부담되고, 신청할 수 있는 청년 지원과 준비서류를 알고 싶어요." /><small>토스에서 불러온 나이·지역은 다시 적지 않아도 돼요. · {reportDetails.length}/700</small></label><label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span>더 잘 맞는 복지정보를 찾기 위해 입력한 내용이 AI 분석에 사용되는 것에 동의해요. 이름·전화번호·상세주소는 보내지 않고, 입력 내용은 별도로 저장하지 않아요.</span></label></>}
+                {reportStep === 6 && <><h3>지금 가장 필요한 도움을 들려주세요</h3><p>선택지만으로 알기 어려운 상황을 적어주시면, 내게 더 잘 맞는 복지정보를 꼼꼼하게 찾아볼게요.</p><label className="report-field"><span>현재 상황을 자세히 알려주세요 <small>선택</small></span><textarea maxLength={700} value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} placeholder="예: 경기도에서 혼자 월세로 살고 있는 취업준비생이에요. 생활비와 취업교육비가 부담되고, 신청할 수 있는 청년 지원과 준비서류를 알고 싶어요." /><small>주민등록번호·계좌·카드·인증정보는 입력하지 마세요. · {reportDetails.length}/700</small></label><label className="report-consent"><input type="checkbox" checked={reportConsent} onChange={(event) => setReportConsent(event.target.checked)} /><span><b>[필수] 민감정보 처리 동의</b><br />장애·임신·건강·소득 등 선택 입력 정보를 맞춤 복지 분석에 사용해요. 이름·전화번호·이메일·상세주소는 AI에 보내지 않아요.</span></label><label className="report-consent"><input type="checkbox" checked={overseasConsent} onChange={(event) => setOverseasConsent(event.target.checked)} /><span><b>[필수] 개인정보 국외 이전 동의</b><br />입력 조건을 AI 분석을 위해 OpenAI(미국 등)에 암호화해 전송해요. 거부하면 AI 리포트 대신 무료 검색을 이용할 수 있어요.</span></label></>}
                 {reportStep === 7 && <><h3>내게 맞는 복지정보를 찾을 준비가 됐어요</h3><p>알려주신 내용을 바탕으로 신청 가능성이 높은 혜택과 필요한 서류를 보기 쉽게 정리해 드릴게요.</p>{reportError && <p className="report-error" role="alert">{reportError}</p>}<div className="report-price-summary"><span>AI 맞춤 상세 분석</span><strong>1회 990원</strong></div>{pendingOrderId ? <button className="tds-primary-button" disabled={reportLoading} onClick={() => void retryPendingReport()}>{reportLoading ? "나에게 맞는 복지정보를 다시 찾고 있어요…" : "추가 결제 없이 리포트 다시 만들기"}</button> : !profile ? <button className="tds-primary-button" disabled={authLoading} onClick={() => void handleTossLogin(false)}>{authLoading ? "내 정보를 안전하게 확인하고 있어요…" : "로그인하고 결제하기"}</button> : <button className="tds-primary-button" disabled={reportLoading} onClick={() => void requestPaidReport()}>{reportLoading ? "내 조건에 맞는 혜택을 꼼꼼히 찾고 있어요…" : "990원 결제하고 상세 분석하기"}</button>}<p className="payment-note">결제가 완료된 뒤 생성에 실패하면 추가 결제 없이 다시 시도할 수 있어요.</p></>}
-                <div className="report-wizard-nav">{reportStep > 0 && <button type="button" onClick={() => setReportStep((step) => step - 1)}>이전</button>}{reportStep < 7 && <button type="button" className="next" disabled={(reportStep === 0 && !reportProfile.household) || (reportStep === 1 && !reportProfile.housing) || (reportStep === 3 && !reportProfile.incomePct) || (reportStep === 6 && !reportConsent)} onClick={() => setReportStep((step) => step + 1)}>다음</button>}</div>
+                <div className="report-wizard-nav">{reportStep > 0 && <button type="button" onClick={() => setReportStep((step) => step - 1)}>이전</button>}{reportStep < 7 && <button type="button" className="next" disabled={(reportStep === 0 && !reportProfile.household) || (reportStep === 1 && !reportProfile.housing) || (reportStep === 3 && !reportProfile.incomePct) || (reportStep === 6 && (!reportConsent || !overseasConsent))} onClick={() => setReportStep((step) => step + 1)}>다음</button>}</div>
               </div>
             )}
           </section>
@@ -1104,7 +1141,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
     </section>
     <div className="onboarding-bottom">
       {/* 1~9단계 모두 동일한 승인 배너 광고 그룹을 하단에 노출한다. */}
-      <Suspense key={`onboarding-ad-${step}`} fallback={null}><TossBannerAd placement={`onboarding_${step + 1}`} /></Suspense>
+      <Suspense fallback={null}><TossBannerAd placement="onboarding" /></Suspense>
       <button className="onboarding-next" disabled={!canContinue || resultAdShowing} onClick={next}>{step === steps.length - 1 ? resultAdShowing ? "나에게 맞는 혜택을 찾고 있어요…" : "광고 보고 맞춤 혜택 보기" : "다음"}</button>
     </div>
   </div>;
@@ -1139,8 +1176,8 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
           <>
             <DetailBlock title="기기에 저장되는 정보" text="저장한 혜택 목록은 앱인토스 기기 저장소에만 보관돼요. 운영자는 이 값을 확인할 수 없으며, 미니앱 데이터를 삭제하면 함께 지워져요." />
             <DetailBlock title="서버에서 처리되는 정보" text="정책 조회 과정의 접속 기록과, 토스 로그인 시 사용자가 동의한 식별키·프로필 정보를 로그인 및 맞춤 안내 목적으로 처리해요. 유저정보 불러오기 결과는 현재 화면에만 표시하고 서버에 저장하지 않아요." />
-            <DetailBlock title="외부 서비스" text="정책 데이터 제공과 호스팅을 위해 Vercel 서버와 통신해요. 공식 신청 버튼을 누른 경우 선택한 공공기관 페이지로 이동해요." />
-            <DetailBlock title="AI 맞춤 복지 리포트" text="사용자가 별도로 동의하고 입력한 상황, 나이·지역·성별·내외국인 조건은 맞춤 복지 리포트 생성을 위해 OpenAI API로 전송돼요. 이름·전화번호·주소는 전송하지 않으며, 서비스 데이터베이스에 리포트 입력값과 결과를 별도로 저장하지 않아요." />
+            <DetailBlock title="외부 서비스와 국외 이전" text="서비스 호스팅은 Vercel, 리포트 보관은 Upstash, AI 분석은 OpenAI를 이용해요. 처리 과정에서 정보가 미국 등 국외로 이전될 수 있으며, 동의하지 않으면 AI 리포트 기능을 이용하지 않을 수 있어요." />
+            <DetailBlock title="AI 맞춤 복지 리포트" text="별도 동의 후 입력한 상황, 나이·지역·성별·내외국인 조건을 OpenAI API로 전송해요. 이름·전화번호·상세주소는 보내지 않아요. 생성 결과는 재설치 후 복원과 결제 이행을 위해 암호화해 최대 90일 보관해요." />
             <DetailBlock title="문의" text="개인정보 관련 문의: fogtemplar@gmail.com" />
           </>
         ) : (
@@ -1148,7 +1185,7 @@ function LegalSheet({ kind, onClose }: { kind: "terms" | "privacy"; onClose: () 
             <DetailBlock title="서비스 성격" text="나라가쏜다는 정부·지자체의 공개 정책 정보를 정리한 비공식 안내 서비스예요. 지원 자격이나 지급을 판정·보장하지 않아요." />
             <DetailBlock title="정보 확인" text="공공기관의 변경 사항이 반영되기까지 시차가 있을 수 있어요. 신청 조건, 금액, 마감일은 반드시 공식 기관 페이지에서 최종 확인해 주세요." />
             <DetailBlock title="외부 페이지" text="공식 기관 페이지를 열면 해당 기관의 이용약관과 개인정보처리방침이 적용돼요." />
-            <DetailBlock title="리포트 이용 방법" text="AI 맞춤 복지 리포트는 1회 990원의 소비성 인앱결제로 이용할 수 있어요. 결제 후 생성에 실패한 경우에는 추가 결제 없이 다시 시도할 수 있으며, 결제·환불은 앱 마켓 및 앱인토스 정책을 따라요." />
+            <DetailBlock title="리포트 이용 방법" text="AI 맞춤 복지 리포트는 1회 990원의 소비성 인앱결제로 이용해요. 실제 리포트 생성과 보관이 끝난 뒤 지급 완료로 처리하며, 실패한 주문은 추가 결제 없이 복구할 수 있어요. 환불은 구매한 앱 마켓 정책을 따라요." />
             <DetailBlock title="문의" text="서비스 문의: fogtemplar@gmail.com" />
           </>
         )}

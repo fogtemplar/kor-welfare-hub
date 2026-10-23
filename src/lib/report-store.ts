@@ -7,6 +7,7 @@ type StoredReportEnvelope = {
 };
 
 const REPORT_TTL_SECONDS = 90 * 24 * 60 * 60;
+const REVOCATION_TTL_SECONDS = 365 * 24 * 60 * 60;
 
 function config() {
   const url = (process.env.REPORT_REDIS_REST_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL)?.replace(/\/$/, "");
@@ -62,10 +63,53 @@ export async function saveUserReport(userKey: number, value: StoredReportEnvelop
   const encoded = seal(value);
   await command(["SET", `welfare:report:user:${userKey}:latest`, encoded, "EX", REPORT_TTL_SECONDS]);
   await command(["SET", `welfare:report:order:${value.orderId}`, String(userKey), "EX", REPORT_TTL_SECONDS]);
+  await command(["SET", `welfare:report:order:${value.orderId}:data`, encoded, "EX", REPORT_TTL_SECONDS]);
+  await command(["SADD", `welfare:report:user:${userKey}:orders`, value.orderId]);
+  await command(["EXPIRE", `welfare:report:user:${userKey}:orders`, REPORT_TTL_SECONDS]);
   return true;
 }
 
 export async function getLatestUserReport(userKey: number) {
   const result = await command(["GET", `welfare:report:user:${userKey}:latest`]);
   return typeof result === "string" ? open(result) : null;
+}
+
+export async function getUserReportByOrder(userKey: number, orderId: string) {
+  if (!config()) return null;
+  const owner = await command(["GET", `welfare:report:order:${orderId}`]);
+  if (String(owner || "") !== String(userKey)) return null;
+  const result = await command(["GET", `welfare:report:order:${orderId}:data`]);
+  return typeof result === "string" ? open(result) : null;
+}
+
+export async function deleteUserReport(userKey: number) {
+  if (!config()) return false;
+  const latest = await getLatestUserReport(userKey);
+  const orderSetKey = `welfare:report:user:${userKey}:orders`;
+  const result = await command(["SMEMBERS", orderSetKey]);
+  const orderIds = new Set(Array.isArray(result) ? result.filter((value): value is string => typeof value === "string") : []);
+  if (latest?.orderId) orderIds.add(latest.orderId);
+  const keys = [`welfare:report:user:${userKey}:latest`, orderSetKey];
+  for (const orderId of orderIds) {
+    keys.push(`welfare:report:order:${orderId}`, `welfare:report:order:${orderId}:data`);
+  }
+  await command(["DEL", ...keys]);
+  return true;
+}
+
+export async function markTossUserRevoked(userKey: number) {
+  if (!config()) return false;
+  await command(["SET", `welfare:toss:revoked:${userKey}`, "1", "EX", REVOCATION_TTL_SECONDS]);
+  return true;
+}
+
+export async function clearTossUserRevoked(userKey: number) {
+  if (!config()) return false;
+  await command(["DEL", `welfare:toss:revoked:${userKey}`]);
+  return true;
+}
+
+export async function isTossUserRevoked(userKey: number) {
+  if (!config()) return false;
+  return (await command(["GET", `welfare:toss:revoked:${userKey}`])) === "1";
 }

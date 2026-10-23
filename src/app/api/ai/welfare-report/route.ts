@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CURATED_POLICIES } from "@/lib/data/policies";
-import { saveUserReport } from "@/lib/report-store";
+import { getUserReportByOrder, isTossUserRevoked, saveUserReport } from "@/lib/report-store";
 import { fetchExternalPolicies } from "@/lib/scrapers/aggregate";
 import { getTossIapOrderStatus } from "@/lib/toss-login";
 import { openSession, TOSS_SESSION_COOKIE } from "@/lib/toss-session";
@@ -41,6 +41,34 @@ function getOutputText(payload: unknown): string {
   return response.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text || "";
 }
 
+function safetyIssue(details: string) {
+  const compact = details.replace(/\s+/g, " ");
+  if (/\d{6}\s*-?\s*[1-4]\d{6}/.test(compact)) return "주민등록번호는 입력할 수 없어요.";
+  if (/(?:카드번호|계좌번호|비밀번호|인증번호).{0,20}\d{6,}/i.test(compact)) return "계좌·카드·인증정보는 입력하지 말아 주세요.";
+  if (/(?:자살|극단적 선택|죽고 싶|죽고싶).{0,30}(?:방법|계획|도와|어떻게)/i.test(compact)) {
+    return "지금 안전이 가장 중요해요. 이 서비스 대신 가까운 사람이나 응급기관에 즉시 도움을 요청해 주세요.";
+  }
+  if (/(?:폭발물|마약|해킹|총기).{0,30}(?:제조|만들|구매|침입|방법)/i.test(compact)) return "복지 상담과 무관한 위험한 요청은 처리할 수 없어요.";
+  return null;
+}
+
+function sanitizeReport(value: unknown, policies: Array<{ id: string; title: string; agency: string; url: string }>) {
+  if (!value || typeof value !== "object") throw new Error("INVALID_REPORT_OUTPUT");
+  const report = value as Record<string, unknown>;
+  const allowed = new Map(policies.map((policy) => [policy.id, policy]));
+  const recommendations = Array.isArray(report.recommendations)
+    ? report.recommendations.flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const recommendation = item as Record<string, unknown>;
+        const policy = allowed.get(String(recommendation.policyId || ""));
+        if (!policy) return [];
+        return [{ ...recommendation, policyId: policy.id, title: policy.title, agency: policy.agency, url: policy.url }];
+      })
+    : [];
+  if (recommendations.length < 2) throw new Error("INVALID_REPORT_RECOMMENDATIONS");
+  return { ...report, recommendations };
+}
+
 export async function POST(request: NextRequest) {
   if (!process.env.OPENAI_API_KEY) return NextResponse.json({ error: "AI_REPORT_NOT_CONFIGURED" }, { status: 503 });
 
@@ -52,10 +80,14 @@ export async function POST(request: NextRequest) {
   const reportId = orderId;
   const details = String(body.details || "").trim();
   if (reportId.length < 8 || details.length > 700 || !body.profile?.household || !body.profile?.housing || !body.profile?.incomePct) return NextResponse.json({ error: "INVALID_REPORT_REQUEST" }, { status: 400 });
-  if (/\d{6}\s*-?\s*[1-4]\d{6}/.test(details)) return NextResponse.json({ error: "주민등록번호는 입력할 수 없어요." }, { status: 400 });
+  const blockedMessage = safetyIssue(details);
+  if (blockedMessage) return NextResponse.json({ error: blockedMessage, code: "UNSAFE_OR_SENSITIVE_INPUT" }, { status: 422 });
 
   const session = openSession(request.cookies.get(TOSS_SESSION_COOKIE)?.value || "");
   if (!session) return NextResponse.json({ error: "TOSS_LOGIN_REQUIRED" }, { status: 401 });
+  if (await isTossUserRevoked(session.profile.userKey)) {
+    return NextResponse.json({ error: "TOSS_CONNECTION_REVOKED" }, { status: 401 });
+  }
   try {
     const order = await getTossIapOrderStatus(orderId, session.profile.userKey);
     const validStatus = order.status === "PAYMENT_COMPLETED" || order.status === "PURCHASED";
@@ -69,6 +101,8 @@ export async function POST(request: NextRequest) {
   }
 
   pruneOrders();
+  const persisted = await getUserReportByOrder(session.profile.userKey, reportId);
+  if (persisted?.report) return NextResponse.json(persisted.report, { headers: { "Cache-Control": "no-store" } });
   const existing = recentOrders.get(reportId);
   if (existing?.report) return NextResponse.json(existing.report, { headers: { "Cache-Control": "no-store" } });
   if (existing) return NextResponse.json({ error: "ORDER_PROCESSING" }, { status: 409 });
@@ -85,7 +119,8 @@ export async function POST(request: NextRequest) {
       headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-5.6",
-        instructions: "당신은 한국 복지제도 실무 경험이 풍부한 전문 상담사입니다. 결과는 모바일에서 정책별 카드로 읽기 쉽게 사용할 수 있도록 항목을 짧고 구체적으로 작성하세요. 제공된 후보 정책만 추천하고 존재하지 않는 금액·기한·서류·주소를 만들어내지 마세요. 정보가 없으면 '공식 공고 확인 필요'라고 명시하세요. 자격은 확정하지 말고 일치·추가확인·불일치 가능성으로 평가하세요. 각 정책마다 판단 근거, 예상 혜택, 자격 확인 항목, 준비서류, 단계별 신청 절차, 신청 장소 또는 온라인 접수처, 기한, 중복수급·탈락 위험을 구분하세요. 입력된 개인정보는 불필요하게 반복하지 마세요. 문체는 전문적이되 이해하기 쉬운 해요체를 사용하세요.",
+        store: false,
+        instructions: "당신은 한국 복지제도 실무 경험이 풍부한 전문 상담사입니다. 결과는 모바일에서 정책별 카드로 읽기 쉽게 사용할 수 있도록 항목을 짧고 구체적으로 작성하세요. 제공된 후보 정책만 추천하고 존재하지 않는 금액·기한·서류·주소를 만들어내지 마세요. 정보가 없으면 '공식 공고 확인 필요'라고 명시하세요. 자격은 확정하지 말고 일치·추가확인·불일치 가능성으로 평가하세요. 각 정책마다 판단 근거, 예상 혜택, 자격 확인 항목, 준비서류, 단계별 신청 절차, 신청 장소 또는 온라인 접수처, 기한, 중복수급·탈락 위험을 구분하세요. 입력된 개인정보는 불필요하게 반복하지 마세요. 위험하거나 복지 상담과 무관한 요청에는 응답하지 말고 안전한 도움을 안내하세요. 문체는 전문적이되 이해하기 쉬운 해요체를 사용하세요.",
         input: JSON.stringify({ user: { details, age: body.filters?.age, region: body.filters?.region, category: body.filters?.category, gender: body.tossData?.gender, nationality: body.tossData?.nationality, ...body.profile }, candidatePolicies: policies }),
         text: {
           format: {
@@ -123,13 +158,10 @@ export async function POST(request: NextRequest) {
     const payload = await response.json();
     const outputText = getOutputText(payload);
     if (!outputText) throw new Error("EMPTY_REPORT");
-    const report = JSON.parse(outputText) as unknown;
+    const report = sanitizeReport(JSON.parse(outputText) as unknown, policies);
+    const persistedReport = await saveUserReport(session.profile.userKey, { orderId: reportId, createdAt: new Date().toISOString(), report });
+    if (!persistedReport) throw new Error("REPORT_STORE_NOT_CONFIGURED");
     recentOrders.set(reportId, { createdAt: Date.now(), report });
-    try {
-      await saveUserReport(session.profile.userKey, { orderId: reportId, createdAt: new Date().toISOString(), report });
-    } catch (storeError) {
-      console.error("[ai/welfare-report] persistent save failed", storeError);
-    }
     return NextResponse.json(report, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     recentOrders.delete(reportId);
