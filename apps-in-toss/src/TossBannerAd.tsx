@@ -1,4 +1,4 @@
-import { eventLog, TossAds } from "@apps-in-toss/web-framework";
+import { Analytics, TossAds } from "@apps-in-toss/web-framework";
 import { useEffect, useRef, useState } from "react";
 
 const AD_GROUP_ID = import.meta.env.VITE_TOSS_BANNER_AD_GROUP_ID?.trim() || "ait.v2.live.04170610c4b54e80";
@@ -63,18 +63,18 @@ export default function TossBannerAd({ placement = "onboarding" }: { placement?:
         callbacks: {
           onAdRendered: () => {
             setStatus("visible");
-            void eventLog({ log_name: "welfare_banner_rendered", log_type: "event", params: { placement } }).catch(() => undefined);
+            void Analytics.log({ log_name: "welfare_banner_rendered", log_type: "event", params: { placement } }).catch(() => undefined);
           },
-          onAdImpression: () => void eventLog({ log_name: "welfare_banner_impression", log_type: "event", params: { placement } }).catch(() => undefined),
-          onAdViewable: () => void eventLog({ log_name: "welfare_banner_viewable", log_type: "event", params: { placement } }).catch(() => undefined),
-          onAdClicked: () => void eventLog({ log_name: "welfare_banner_clicked", log_type: "event", params: { placement } }).catch(() => undefined),
+          onAdImpression: () => void Analytics.log({ log_name: "welfare_banner_impression", log_type: "event", params: { placement } }).catch(() => undefined),
+          onAdViewable: () => void Analytics.log({ log_name: "welfare_banner_viewable", log_type: "event", params: { placement } }).catch(() => undefined),
+          onAdClicked: () => void Analytics.log({ log_name: "welfare_banner_clicked", log_type: "event", params: { placement } }).catch(() => undefined),
           onNoFill: () => {
             setStatus("hidden");
-            void eventLog({ log_name: "welfare_banner_no_fill", log_type: "event", params: { placement } }).catch(() => undefined);
+            void Analytics.log({ log_name: "welfare_banner_no_fill", log_type: "event", params: { placement } }).catch(() => undefined);
           },
           onAdFailedToRender: () => {
             setStatus("hidden");
-            void eventLog({ log_name: "welfare_banner_failed", log_type: "event", params: { placement } }).catch(() => undefined);
+            void Analytics.log({ log_name: "welfare_banner_failed", log_type: "event", params: { placement } }).catch(() => undefined);
           },
         },
       });

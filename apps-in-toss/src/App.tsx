@@ -1,4 +1,4 @@
-import { appLogin, closeView, eventLog, getConsentedUserData, getSchemeUri, graniteEvent, IAP, loadFullScreenAd, openURL, SafeAreaInsets, showFullScreenAd, Storage } from "@apps-in-toss/web-framework";
+import { Analytics, Device, Environment, graniteEvent, IAP, loadFullScreenAd, SafeArea, Screen, showFullScreenAd, Storage, TossAuth, User } from "@apps-in-toss/web-framework";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import "./App.css";
 
@@ -221,7 +221,7 @@ function App() {
   const [rewardGrantedOpen, setRewardGrantedOpen] = useState(false);
 
   const track = (name: string, params: Record<string, string | number | boolean | null> = {}) => {
-    void eventLog({ log_name: name, log_type: "event", params }).catch(() => undefined);
+    void Analytics.log({ log_name: name, log_type: "event", params }).catch(() => undefined);
   };
 
   const loadRewardPassStatus = useCallback(async () => {
@@ -305,7 +305,7 @@ function App() {
       const savedProfile = localStorage.getItem(PROFILE_KEY);
       if (savedProfile) setReportProfile((current) => ({ ...current, ...(JSON.parse(savedProfile) as Partial<ReportProfile>) }));
       let scheme = "";
-      try { scheme = getSchemeUri(); } catch { scheme = window.location.href; }
+      try { scheme = Environment.initialURL; } catch { scheme = window.location.href; }
       const personalizedEntry = /(?:personalized|welfare-report|맞춤)/i.test(scheme);
       if (personalizedEntry || !localStorage.getItem(ONBOARDING_KEY)) {
         setOnboardingStep(0);
@@ -369,8 +369,8 @@ function App() {
       root.style.setProperty("--ait-safe-left", `${insets.left}px`);
     };
     try {
-      applyInsets(SafeAreaInsets.get());
-      return SafeAreaInsets.subscribe({ onEvent: applyInsets });
+      applyInsets(SafeArea.get());
+      return SafeArea.subscribe({ onEvent: applyInsets });
     } catch {
       return undefined;
     }
@@ -414,7 +414,7 @@ function App() {
           if (reportNudgeOpen) return setReportNudgeOpen(false);
           if (reportOpen && !reportLoading) return setReportOpen(false);
           if (onboardingOpen && onboardingStep > 0) return setOnboardingStep((current) => current - 1);
-          void closeView();
+          void Screen.close();
         },
         onError: () => track("welfare_client_error", { type: "back_event", message: "back event failed" }),
       });
@@ -637,7 +637,7 @@ function App() {
 
   const openExternal = async (url: string) => {
     try {
-      await openURL(url);
+      await Device.openURL(url);
     } catch {
       window.open(url, "_blank", "noopener,noreferrer");
     }
@@ -647,7 +647,7 @@ function App() {
     setAuthLoading(true);
     setAuthError("");
     try {
-      const auth = await appLogin();
+      const auth = await TossAuth.login();
       const response = await fetch(`${API_BASE}/api/toss/login`, {
         method: "POST",
         credentials: "include",
@@ -682,7 +682,7 @@ function App() {
     setAuthLoading(true);
     setAuthError("");
     try {
-      const data = await getConsentedUserData({ consentedUserDataKey: USER_DATA_KEY, shouldRequestAgreementWhenUserDeclined: true });
+      const data = await User.getConsentedData({ consentedUserDataKey: USER_DATA_KEY, shouldRequestAgreementWhenUserDeclined: true });
       const next = (data || null) as ConsentedData | null;
       setConsentedData(next);
       if (next?.USER_BIRTHDAY && /^\d{8}$/.test(next.USER_BIRTHDAY)) {
@@ -1268,12 +1268,12 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
       onEvent: ({ type }) => {
         if (type === "loaded") {
           setResultAdReady(true);
-          void eventLog({ log_name: "welfare_result_ad_loaded", log_type: "event" }).catch(() => undefined);
+          void Analytics.log({ log_name: "welfare_result_ad_loaded", log_type: "event" }).catch(() => undefined);
         }
       },
       onError: () => {
         setResultAdReady(false);
-        void eventLog({ log_name: "welfare_result_ad_load_failed", log_type: "event" }).catch(() => undefined);
+        void Analytics.log({ log_name: "welfare_result_ad_load_failed", log_type: "event" }).catch(() => undefined);
       },
     });
     return cleanup;
@@ -1299,7 +1299,7 @@ function FirstVisitOnboarding({ step, total, profile, tossProfile, consentedData
         showFullScreenAd({
           options: { adGroupId: RESULT_AD_GROUP_ID },
           onEvent: ({ type }) => {
-            if (type === "show") void eventLog({ log_name: "welfare_result_ad_shown", log_type: "event" }).catch(() => undefined);
+            if (type === "show") void Analytics.log({ log_name: "welfare_result_ad_shown", log_type: "event" }).catch(() => undefined);
             if (type === "dismissed" || type === "failedToShow") finish();
           },
           onError: finish,
